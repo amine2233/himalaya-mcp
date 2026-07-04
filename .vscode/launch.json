@@ -1,0 +1,24 @@
+{
+  "configurations": [
+    {
+      "type": "swift",
+      "request": "launch",
+      "args": [],
+      "cwd": "${workspaceFolder:mcp-arguments-parser-cli}",
+      "name": "Debug JiraMcpCLI",
+      "target": "JiraMcpCLI",
+      "configuration": "debug",
+      "preLaunchTask": "swift: Build Debug JiraMcpCLI"
+    },
+    {
+      "type": "swift",
+      "request": "launch",
+      "args": [],
+      "cwd": "${workspaceFolder:mcp-arguments-parser-cli}",
+      "name": "Release JiraMcpCLI",
+      "target": "JiraMcpCLI",
+      "configuration": "release",
+      "preLaunchTask": "swift: Build Release JiraMcpCLI"
+    }
+  ]
+}

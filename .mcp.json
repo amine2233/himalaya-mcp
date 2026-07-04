@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "himalaya-mcp": {
+      "command": "/Users/amine/Developer/personal/gitlab/intech-consulting-app/mvp-tests/mcp-arguments-parser-cli/.build/arm64-apple-macosx/release/HimalayaMcpCLI",
+      "args": ["serve"]
+    }
+  }
+}
