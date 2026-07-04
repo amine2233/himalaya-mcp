@@ -19,6 +19,26 @@
       "target": "JiraMcpCLI",
       "configuration": "release",
       "preLaunchTask": "swift: Build Release JiraMcpCLI"
+    },
+    {
+      "type": "swift",
+      "request": "launch",
+      "args": [],
+      "cwd": "${workspaceFolder:himalaya-mcp}",
+      "name": "Debug HimalayaMcpCLI",
+      "target": "HimalayaMcpCLI",
+      "configuration": "debug",
+      "preLaunchTask": "swift: Build Debug HimalayaMcpCLI"
+    },
+    {
+      "type": "swift",
+      "request": "launch",
+      "args": [],
+      "cwd": "${workspaceFolder:himalaya-mcp}",
+      "name": "Release HimalayaMcpCLI",
+      "target": "HimalayaMcpCLI",
+      "configuration": "release",
+      "preLaunchTask": "swift: Build Release HimalayaMcpCLI"
     }
   ]
 }
