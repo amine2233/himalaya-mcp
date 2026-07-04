@@ -21,9 +21,12 @@ public struct ReadEmailRequest: Request {
     public init() {}
 
     public func execute(_ input: Input, in application: Application) async throws -> String {
-        var arguments = ["message", "read", input.id, "--no-headers"]
-        if let folder = input.folder { arguments += ["--folder", folder] }
-        if let account = input.account { arguments += ["--account", account] }
-        return try application.make(HimalayaServiceKey.self).run(arguments: arguments)
+        try application.runHimalaya(
+            application.himalayaDialect.readMessage(
+                id: input.id,
+                mailbox: input.folder,
+                account: input.account
+            )
+        )
     }
 }

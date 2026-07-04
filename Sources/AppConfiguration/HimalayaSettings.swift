@@ -17,10 +17,19 @@ public struct HimalayaSettings: Sendable {
     /// default `120000` = 2 minutes)
     public let timeoutMilliseconds: Int
 
-    public init(account: String? = nil, folder: String? = nil, timeoutMilliseconds: Int = 120_000) {
+    /// Which himalaya CLI major version to target. (`HIMALAYA_VERSION`, default `v1`)
+    public let version: HimalayaVersion
+
+    public init(
+        account: String? = nil,
+        folder: String? = nil,
+        timeoutMilliseconds: Int = 120_000,
+        version: HimalayaVersion = .v1
+    ) {
         self.account = account
         self.folder = folder
         self.timeoutMilliseconds = timeoutMilliseconds
+        self.version = version
     }
 
     /// Reads the settings from a configuration reader.
@@ -31,5 +40,6 @@ public struct HimalayaSettings: Sendable {
         self.account = config.string(forKey: "himalaya.account")
         self.folder = config.string(forKey: "himalaya.folder")
         self.timeoutMilliseconds = config.int(forKey: "himalaya.timeout", default: 120_000)
+        self.version = HimalayaVersion(string: config.string(forKey: "himalaya.version"))
     }
 }

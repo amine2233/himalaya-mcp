@@ -25,26 +25,17 @@ public struct HimalayaServiceDefault: HimalayaService {
 
     private let executable: any ExecutableService
     private let environment: [String: String]
-    private let defaultAccount: String?
-    private let defaultFolder: String?
 
     /// - Parameters:
     ///   - executable: Runner used to spawn the resolved binary.
     ///   - environment: Environment to read the override and `PATH` from. Defaults
     ///     to the current process environment.
-    ///   - defaultAccount: Account injected as `--account` when a call omits one.
-    ///   - defaultFolder: Folder injected as `--folder` when a folder-accepting
-    ///     call omits one.
     public init(
         executable: any ExecutableService,
-        environment: [String: String] = ProcessInfo.processInfo.environment,
-        defaultAccount: String? = nil,
-        defaultFolder: String? = nil
+        environment: [String: String] = ProcessInfo.processInfo.environment
     ) {
         self.executable = executable
         self.environment = environment
-        self.defaultAccount = defaultAccount
-        self.defaultFolder = defaultFolder
     }
 
     public func resolveExecutablePath() throws -> String {
@@ -72,48 +63,11 @@ public struct HimalayaServiceDefault: HimalayaService {
     }
 
     public func run(arguments: [String], standardInput: String? = nil) throws -> String {
-        let effective = Self.applyingDefaults(to: arguments, account: defaultAccount, folder: defaultFolder)
-        return try executable.run(
+        try executable.run(
             executable: resolveExecutablePath(),
-            arguments: effective,
+            arguments: arguments,
             standardInput: standardInput
         )
-    }
-
-    /// Weaves the configured default account/folder into `arguments`, leaving an
-    /// explicitly-provided `--account`/`--folder` untouched.
-    static func applyingDefaults(to arguments: [String], account: String?, folder: String?) -> [String] {
-        var arguments = arguments
-        if let account, commandAcceptsAccount(arguments), !arguments.contains("--account") {
-            arguments += ["--account", account]
-        }
-        if let folder, commandAcceptsFolder(arguments), !arguments.contains("--folder") {
-            arguments += ["--folder", folder]
-        }
-        return arguments
-    }
-
-    /// Whether the himalaya command in `arguments` accepts an `--account` option.
-    /// The `account` family takes a positional account name, not `--account`.
-    static func commandAcceptsAccount(_ arguments: [String]) -> Bool {
-        guard let command = arguments.first else { return false }
-
-        return command != "account"
-    }
-
-    /// Whether the himalaya command in `arguments` accepts a `--folder` option.
-    /// The `account`/`folder` families and the `write`/`send` subcommands of
-    /// `message`/`template` do not.
-    static func commandAcceptsFolder(_ arguments: [String]) -> Bool {
-        switch arguments.first {
-        case "folder", "account":
-            return false
-        case "message", "template":
-            let subcommand = arguments.dropFirst().first
-            return subcommand != "write" && subcommand != "send"
-        default:
-            return arguments.first != nil
-        }
     }
 
     /// Whether `path` points at a runnable file. Wraps `FileManager` so the

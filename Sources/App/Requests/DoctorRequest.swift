@@ -42,8 +42,9 @@ public struct DoctorRequest: Request {
             return DoctorReport(himalayaPath: nil, accounts: [], ok: false)
         }
 
+        let dialect = application.himalayaDialect
         let discovered = Self
-            .parseAccounts((try? himalaya.run(arguments: ["account", "list", "-o", "json"])) ?? "")
+            .parseAccounts((try? application.runHimalaya(dialect.listAccountsJSON())) ?? "")
         let targets: [(name: String, isDefault: Bool, backend: String?)] = if let requested = input.account {
             [discovered.first { $0.name == requested } ?? (name: requested, isDefault: false, backend: nil)]
         } else {
@@ -51,7 +52,7 @@ public struct DoctorRequest: Request {
         }
 
         let accounts = targets.map { target -> AccountHealth in
-            let output = (try? himalaya.run(arguments: ["folder", "list", "--account", target.name])) ?? ""
+            let output = (try? application.runHimalaya(dialect.probeAccount(target.name))) ?? ""
             let reachable = output.contains("NAME")
             return AccountHealth(
                 name: target.name,

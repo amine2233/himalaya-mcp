@@ -43,11 +43,11 @@ public struct DraftReplyRequest: Request {
     public init() {}
 
     public func execute(_ input: Input, in application: Application) async throws -> String {
-        var arguments = ["template", "reply", input.id]
-        if input.replyAll == true { arguments.append("--all") }
-        if let folder = input.folder { arguments += ["--folder", folder] }
-        if let account = input.account { arguments += ["--account", account] }
-        if let body = input.body { arguments.append(body) }
-        return try application.make(HimalayaServiceKey.self).run(arguments: arguments)
+        try application.runHimalaya(
+            application.himalayaDialect.replyTemplate(
+                id: input.id, body: input.body, all: input.replyAll == true,
+                mailbox: input.folder, account: input.account
+            )
+        )
     }
 }

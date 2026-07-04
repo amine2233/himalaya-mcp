@@ -17,8 +17,8 @@ public struct CreateFolderRequest: Request {
     public init() {}
 
     public func execute(_ input: Input, in application: Application) async throws -> String {
-        var arguments = ["folder", "add", input.name]
-        if let account = input.account { arguments += ["--account", account] }
-        return try application.make(HimalayaServiceKey.self).run(arguments: arguments)
+        try application.runHimalaya(
+            application.himalayaDialect.createMailbox(name: input.name, account: input.account)
+        )
     }
 }

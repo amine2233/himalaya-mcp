@@ -26,10 +26,11 @@ public struct ListAttachmentsRequest: Request {
 
     public func execute(_ input: Input, in application: Application) async throws -> String {
         try HimalayaWorkspace.withTemporaryDirectory { directory in
-            var arguments = ["attachment", "download", input.id, "--downloads-dir", directory.path]
-            if let folder = input.folder { arguments += ["--folder", folder] }
-            if let account = input.account { arguments += ["--account", account] }
-            _ = try application.make(HimalayaServiceKey.self).run(arguments: arguments)
+            _ = try application.runHimalaya(
+                application.himalayaDialect.listAttachments(
+                    id: input.id, destination: directory.path, mailbox: input.folder, account: input.account
+                )
+            )
 
             let files = try HimalayaWorkspace.files(in: directory)
             guard !files.isEmpty else {

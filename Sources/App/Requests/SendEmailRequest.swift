@@ -39,13 +39,9 @@ public struct SendEmailRequest: Request {
         }
 
         let template = MMLAttachment.appended(to: input.template, paths: input.attachments ?? [])
-        var arguments = ["template", "send"]
-        if let account = input.account { arguments += ["--account", account] }
-
-        // himalaya reads the template from stdin — passing it as an argument fails
-        // with "cannot parse template".
-        let output = try application.make(HimalayaServiceKey.self)
-            .run(arguments: arguments, standardInput: template)
+        let output = try application.runHimalaya(
+            application.himalayaDialect.sendTemplate(template, account: input.account)
+        )
         return output.isEmpty ? "Message sent." : output
     }
 }

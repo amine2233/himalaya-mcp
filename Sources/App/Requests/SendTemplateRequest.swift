@@ -53,12 +53,9 @@ public struct SendTemplateRequest: Request {
         }
 
         let template = MMLAttachment.appended(to: source, paths: input.attachments ?? [])
-        var arguments = ["template", "send"]
-        if let account = input.account { arguments += ["--account", account] }
-
-        // himalaya reads the template from stdin, not from an argument.
-        let output = try application.make(HimalayaServiceKey.self)
-            .run(arguments: arguments, standardInput: template)
+        let output = try application.runHimalaya(
+            application.himalayaDialect.sendTemplate(template, account: input.account)
+        )
         return output.isEmpty ? "Template sent." : output
     }
 

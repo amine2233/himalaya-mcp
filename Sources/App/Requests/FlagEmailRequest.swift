@@ -34,9 +34,10 @@ public struct FlagEmailRequest: Request {
             throw AppError.invalidArgument("flag_email requires at least one flag.")
         }
 
-        var arguments = ["flag", input.action.rawValue, input.id]
-        arguments += flags
-        if let folder = input.folder { arguments += ["--folder", folder] }
-        return try application.make(HimalayaServiceKey.self).run(arguments: arguments)
+        return try application.runHimalaya(
+            application.himalayaDialect.setFlags(
+                id: input.id, flags: flags, add: input.action == .add, mailbox: input.folder, account: nil
+            )
+        )
     }
 }

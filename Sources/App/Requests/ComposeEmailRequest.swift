@@ -37,13 +37,10 @@ public struct ComposeEmailRequest: Request {
 
     public func execute(_ input: Input, in application: Application) async throws -> String {
         let body = MMLAttachment.appended(to: input.body, paths: input.attachments ?? [])
-        var arguments = [
-            "template", "write",
-            "--header", "To:\(input.to)",
-            "--header", "Subject:\(input.subject)"
-        ]
-        if let account = input.account { arguments += ["--account", account] }
-        arguments.append(body)
-        return try application.make(HimalayaServiceKey.self).run(arguments: arguments)
+        return try application.runHimalaya(
+            application.himalayaDialect.composeTemplate(
+                to: input.to, subject: input.subject, body: body, account: input.account
+            )
+        )
     }
 }

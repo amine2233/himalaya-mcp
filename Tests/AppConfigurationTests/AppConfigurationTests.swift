@@ -41,4 +41,24 @@ func himalayaSettingsDefaults() {
     #expect(settings.account == nil) // himalaya's default account
     #expect(settings.folder == nil) // himalaya's default folder (INBOX)
     #expect(settings.timeoutMilliseconds == 120_000) // 2 minutes
+    #expect(settings.version == .v1) // default to v1
+}
+
+@Test
+func himalayaVersionParsing() {
+    #expect(HimalayaVersion(string: nil) == .v1)
+    #expect(HimalayaVersion(string: "") == .v1)
+    #expect(HimalayaVersion(string: "garbage") == .v1)
+    #expect(HimalayaVersion(string: "1") == .v1)
+    #expect(HimalayaVersion(string: "v1") == .v1)
+    #expect(HimalayaVersion(string: "2") == .v2)
+    #expect(HimalayaVersion(string: "V2") == .v2)
+}
+
+@Test
+func himalayaVersionReadsFromEnvironment() {
+    let config = ConfigReader(provider: EnvironmentVariablesProvider(
+        environmentVariables: ["HIMALAYA_VERSION": "v2"]
+    ))
+    #expect(HimalayaSettings(config: config).version == .v2)
 }

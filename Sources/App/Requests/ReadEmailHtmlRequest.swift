@@ -27,10 +27,11 @@ public struct ReadEmailHtmlRequest: Request {
 
     public func execute(_ input: Input, in application: Application) async throws -> String {
         try HimalayaWorkspace.withTemporaryDirectory { directory in
-            var arguments = ["message", "export", input.id, "--destination", directory.path]
-            if let folder = input.folder { arguments += ["--folder", folder] }
-            if let account = input.account { arguments += ["--account", account] }
-            _ = try application.make(HimalayaServiceKey.self).run(arguments: arguments)
+            _ = try application.runHimalaya(
+                application.himalayaDialect.exportMessage(
+                    id: input.id, destination: directory.path, mailbox: input.folder, account: input.account
+                )
+            )
 
             guard let html = try Self.htmlContents(in: directory) else {
                 return "No HTML part found for message \(input.id)."

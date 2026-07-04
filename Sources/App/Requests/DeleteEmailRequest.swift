@@ -27,12 +27,13 @@ public struct DeleteEmailRequest: Request {
             throw AppError.invalidArgument("delete_email requires at least one id.")
         }
 
-        var arguments = ["message", "delete"]
-        arguments += ids
-        if let folder = input.folder { arguments += ["--folder", folder] }
-        if let account = input.account { arguments += ["--account", account] }
-
-        let output = try application.make(HimalayaServiceKey.self).run(arguments: arguments)
+        let output = try application.runHimalaya(
+            application.himalayaDialect.deleteMessages(
+                ids: ids,
+                mailbox: input.folder,
+                account: input.account
+            )
+        )
         return output.isEmpty ? "Deleted \(ids.count) message(s): \(ids.joined(separator: ", "))." : output
     }
 }

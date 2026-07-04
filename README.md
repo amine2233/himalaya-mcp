@@ -223,6 +223,49 @@ sequenceDiagram
   one account — the server shells out to it (found via `PATH` or `$HIMALAYA_BIN_PATH`)
 - Optional: [`mise`](https://mise.jdx.dev) to run the build/install tasks below
 
+## Installing the himalaya CLI
+
+This server shells out to the [`himalaya`](https://github.com/pimalaya/himalaya) binary, so install it
+first and configure at least one account. Pick the version that matches how you set `HIMALAYA_VERSION`
+(the MCP server **defaults to v1**).
+
+### himalaya v1 (stable — default)
+
+```bash
+# Homebrew (macOS/Linux) — ships the 1.x line
+brew install himalaya
+
+# or with Cargo, pinned to the 1.x line
+cargo install himalaya --version '^1' --locked
+```
+
+Leave `HIMALAYA_VERSION` at its default (`v1`).
+
+### himalaya v2 (alpha — OAuth2 backends: Outlook / Microsoft 365, Gmail, JMAP)
+
+v2 adds first-class **OAuth2** authentication and new backends — notably **Microsoft Graph**
+(`+msgraph`, i.e. Outlook / Microsoft 365 / Office 365), **Gmail** (`+gmail`), and **JMAP** — alongside
+IMAP/SMTP/Maildir. If your provider requires OAuth2 (Outlook, Gmail, Fastmail, …), use v2:
+
+```bash
+# Cargo — pre-release versions must be requested explicitly
+cargo install himalaya --version '2.0.0-alpha.1' --locked
+
+# or build the latest from source
+cargo install --git https://github.com/pimalaya/himalaya --locked
+```
+
+Then tell the MCP server to speak v2:
+
+```bash
+HIMALAYA_VERSION=v2   # env var, or "himalaya.version": "v2" in the config file
+```
+
+> v2 is **alpha**: a few tools have no v2 equivalent yet and return a clear "not supported on
+> himalaya v2" error (see [himalaya v1 vs v2](#himalaya-v1-vs-v2)). Check your installed version and
+> its compiled features with `himalaya --version` (e.g. `+msgraph +gmail +imap +smtp`), and verify
+> connectivity with `himalaya-mcp doctor`.
+
 ## Install
 
 **Recommended — per-user install to `~/.local/bin` (via mise).** This keeps the binary in your home
@@ -487,6 +530,7 @@ file**:
 | Default account | `HIMALAYA_ACCOUNT` | `himalaya.account` | system default |
 | Default folder | `HIMALAYA_FOLDER` | `himalaya.folder` | `INBOX` |
 | Command timeout (ms) | `HIMALAYA_TIMEOUT` | `himalaya.timeout` | `120000` (2 min; `0` = unlimited) |
+| himalaya CLI version | `HIMALAYA_VERSION` | `himalaya.version` | `v1` (accepts `v1`/`1`, `v2`/`2`) |
 
 Also: `HIMALAYA_BIN_PATH` overrides binary discovery (see [What it does](#what-it-does)).
 
@@ -500,9 +544,32 @@ missing file is fine; env always wins over the file.
 }
 ```
 
-`HIMALAYA_ACCOUNT` / `HIMALAYA_FOLDER` are woven into every command as `--account` / `--folder` when a
-tool call omits them (folder only for commands that accept one). `HIMALAYA_TIMEOUT` bounds each
-subprocess; exceeding it terminates the command and returns a timeout error.
+`HIMALAYA_ACCOUNT` / `HIMALAYA_FOLDER` default the account/mailbox on every command when a call omits
+them. `HIMALAYA_TIMEOUT` bounds each subprocess; exceeding it terminates the command and returns a
+timeout error.
+
+### himalaya v1 vs v2
+
+himalaya v1 and v2 have materially different command surfaces. The version is selected by
+`HIMALAYA_VERSION` (**default `v1`**), and each version's commands are built by a `HimalayaDialect`
+implementation (`HimalayaDialectV1` / `HimalayaDialectV2`) — the single seam where every difference
+lives, so adding or fixing a version is a localized change. Requests depend only on the protocol.
+
+Notable v1 → v2 changes handled by the dialect:
+
+| Operation | v1 | v2 |
+|-----------|-----|-----|
+| Folders | `folder list/add/delete`, `--folder` | `mailbox list`, `--mailbox` |
+| Search | `envelope list <query>` | `envelope search <query>` |
+| Flags | `flag add <id> <flag…>` | `flag add --flag <F> … <id>` |
+| Move | `message move <target> <id>` | `message move --to <t> --from <src> <id>` |
+| Send | `template send` (stdin) | `message send` (stdin) |
+| JSON | `-o json` | `--json` |
+
+Some v1 features have no v2 equivalent yet (v2 is alpha): `read_email_html` (no `message export`),
+`create_folder` / `delete_folder`, `compose_email` / `draft_reply` (the `template` family is gone),
+and `delete_email` (no `message delete`). On v2 these tools return a clear
+*"… is not supported on himalaya v2"* error. Set `HIMALAYA_VERSION=v2` only if you run himalaya v2.
 
 ### Experimental features
 

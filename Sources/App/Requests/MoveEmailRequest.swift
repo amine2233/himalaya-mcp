@@ -30,10 +30,10 @@ public struct MoveEmailRequest: Request {
     public init() {}
 
     public func execute(_ input: Input, in application: Application) async throws -> String {
-        // himalaya expects the target folder before the id: `message move <TARGET> <ID>`.
-        var arguments = ["message", "move", input.targetFolder, input.id]
-        if let folder = input.folder { arguments += ["--folder", folder] }
-        if let account = input.account { arguments += ["--account", account] }
-        return try application.make(HimalayaServiceKey.self).run(arguments: arguments)
+        try application.runHimalaya(
+            application.himalayaDialect.moveMessage(
+                id: input.id, target: input.targetFolder, mailbox: input.folder, account: input.account
+            )
+        )
     }
 }

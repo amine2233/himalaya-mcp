@@ -13,11 +13,13 @@ public func configure(_ app: Application) async {
         ExecutableServiceDefault(timeoutMilliseconds: settings.timeoutMilliseconds)
     }
     app.register(HimalayaServiceKey.self) { container in
-        HimalayaServiceDefault(
-            executable: container.make(ExecutableServiceKey.self),
-            defaultAccount: settings.account,
-            defaultFolder: settings.folder
-        )
+        HimalayaServiceDefault(executable: container.make(ExecutableServiceKey.self))
+    }
+    app.register(HimalayaDialectKey.self) { _ in
+        switch settings.version {
+        case .v1: HimalayaDialectV1(defaultAccount: settings.account, defaultFolder: settings.folder)
+        case .v2: HimalayaDialectV2(defaultAccount: settings.account, defaultFolder: settings.folder)
+        }
     }
 
     app.register(HimalayaSettingsServiceKey.self, scope: .transient) { _ in settings }
