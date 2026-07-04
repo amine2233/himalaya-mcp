@@ -1,0 +1,21 @@
+{
+  "//": "Example Claude Desktop config for himalaya-mcp.",
+  "//1": "Copy the `himalaya-mcp` entry into your real config at:",
+  "//2": "  macOS:   ~/Library/Application Support/Claude/claude_desktop_config.json",
+  "//3": "  Windows: %APPDATA%\\Claude\\claude_desktop_config.json",
+  "//4": "Use ABSOLUTE paths — Claude Desktop is a GUI app and does NOT inherit your shell PATH.",
+  "//5": "HIMALAYA_BIN_PATH makes himalaya resolvable without PATH; PATH helps its runtime deps.",
+  "mcpServers": {
+    "himalaya-mcp": {
+      "command": "/Users/you/.local/bin/himalaya-mcp",
+      "args": ["serve"],
+      "env": {
+        "HIMALAYA_BIN_PATH": "/opt/homebrew/bin/himalaya",
+        "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin",
+        "HIMALAYA_FOLDER": "INBOX",
+        "HIMALAYA_TIMEOUT": "120000",
+        "EXPERIMENTAL_ENABLED": "false"
+      }
+    }
+  }
+}

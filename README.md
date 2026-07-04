@@ -252,6 +252,38 @@ Or use a `.mcp.json` (this repo's is git-ignored, since it holds a machine-speci
 }
 ```
 
+### Claude Desktop integration
+
+Add the server to Claude Desktop's config, then restart Claude Desktop:
+
+- **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "himalaya-mcp": {
+      "command": "/Users/you/.local/bin/himalaya-mcp",
+      "args": ["serve"],
+      "env": {
+        "HIMALAYA_BIN_PATH": "/opt/homebrew/bin/himalaya",
+        "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin",
+        "HIMALAYA_FOLDER": "INBOX",
+        "HIMALAYA_TIMEOUT": "120000",
+        "EXPERIMENTAL_ENABLED": "false"
+      }
+    }
+  }
+}
+```
+
+> **Important:** use **absolute paths** — Claude Desktop is a GUI app and does **not** inherit your
+> shell `PATH`, so `himalaya` won't be found unless you set `HIMALAYA_BIN_PATH` (and add its directory
+> to `PATH` for its own runtime deps). Merge the `himalaya-mcp` entry into any existing `mcpServers`
+> rather than replacing the file. A ready-to-edit copy lives at
+> [`examples/claude_desktop_config.json`](examples/claude_desktop_config.json). Set
+> `EXPERIMENTAL_ENABLED` to `"true"` only if you want the irreversible `delete_email` tool exposed.
+
 ---
 
 ## Example prompts
