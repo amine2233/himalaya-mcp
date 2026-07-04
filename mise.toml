@@ -5,6 +5,13 @@
 #   mise run mcp-add      # register the installed binary with Claude Code
 #   mise tasks            # list everything
 
+[tools]
+# Swift toolchain — provisioned by mise so CI works on Linux (where ubuntu
+# runners ship no Swift) as well as macOS.
+swift = "6.3.3"
+# executor-cli powers the CI lint/format/coverage tasks (provisioned by mise in CI).
+"github:executor-cli/executor" = "0.27.1"
+
 [env]
 # Per-user install prefix — the best-practice location for user binaries
 # (no sudo, doesn't touch the rest of the machine). Override with INSTALL_DIR=...
@@ -20,8 +27,36 @@ description = "Build the release binary"
 run = "swift build -c release"
 
 [tasks.test]
-description = "Run the test suite"
+description = "Run the test suite (cross-platform)"
 run = "swift test"
+
+# --- Tasks consumed by amine2233/ci-shared (keep these names stable) ---
+
+[tasks.format]
+description = "Format the code using SwiftFormat (executor)"
+run = "executor format ."
+
+[tasks.check_code]
+description = "Lint source code (executor)"
+run = "executor linting code ./Sources --reporter console"
+
+[tasks.check_documentation]
+description = "Lint code documentation (executor)"
+run = "executor linting documentation ./Sources --reporter console"
+
+[tasks.lint]
+description = "Run all static checks (code + documentation) — used by CI's lint job"
+depends = ["check_code", "check_documentation"]
+
+[tasks.test-coverage]
+description = "Run tests with coverage (macOS only; used by CI when coverage is enabled)"
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+executor swift test --enable-code-coverage
+executor test report --report-for-type swift ./
+executor coverage swift --verbose
+'''
 
 [tasks.run]
 description = "Run the CLI (pass args after --)"

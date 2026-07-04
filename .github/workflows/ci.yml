@@ -1,0 +1,21 @@
+# CI for himalaya-mcp — delegates to the shared reusable workflow in
+# amine2233/ci-shared, which installs mise and runs the `lint` / `test` tasks
+# from this repo's mise.toml.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  ci:
+    uses: amine2233/ci-shared/.github/workflows/ci.yml@1.0.2
+    with:
+      # Swift is provisioned via mise ([tools] in mise.toml), so the ubuntu
+      # runner builds and tests too.
+      enable-macos: true
+      enable-linux: true
+      enable-lint: false
+      enable-coverage: false
