@@ -531,17 +531,36 @@ file**:
 | Default folder | `HIMALAYA_FOLDER` | `himalaya.folder` | `INBOX` |
 | Command timeout (ms) | `HIMALAYA_TIMEOUT` | `himalaya.timeout` | `120000` (2 min; `0` = unlimited) |
 | himalaya CLI version | `HIMALAYA_VERSION` | `himalaya.version` | `v1` (accepts `v1`/`1`, `v2`/`2`) |
+| Backend for v2 folder create/delete | `HIMALAYA_BACKEND` | `himalaya.backend` | `imap` (v2 only; e.g. `imap`, `gmail`) |
 
 Also: `HIMALAYA_BIN_PATH` overrides binary discovery (see [What it does](#what-it-does)).
 
-The config file is `himalaya-mcp.json` in the working directory, or the path in `$HIMALAYA_MCP_CONFIG`. A
-missing file is fine; env always wins over the file.
+The config file is loaded from the **first readable path** among (highest priority first):
+
+1. `$HIMALAYA_MCP_CONFIG` (explicit override), else `himalaya-mcp.json` in the current working directory
+2. `$XDG_CONFIG_HOME/himalaya-mcp/config.json`
+3. `$HOME/.config/himalaya-mcp/config.yml`
+4. `$HOME/.himalayamcprc`
+
+A missing file is fine, and **environment variables always win over the file**. The parser is chosen
+by extension: `.yaml`/`.yml` → YAML, everything else (`.json`, `.himalayamcprc`, …) → JSON.
 
 ```json
+// himalaya-mcp.json  (or config.json)
 {
   "experimental": { "enabled": true },
-  "himalaya": { "account": "work", "folder": "INBOX", "timeout": 120000 }
+  "himalaya": { "account": "work", "folder": "INBOX", "timeout": 120000, "version": "v2" }
 }
+```
+
+```yaml
+# ~/.config/himalaya-mcp/config.yml
+experimental:
+  enabled: true
+himalaya:
+  account: work
+  folder: INBOX
+  version: v2
 ```
 
 `HIMALAYA_ACCOUNT` / `HIMALAYA_FOLDER` default the account/mailbox on every command when a call omits
@@ -559,17 +578,27 @@ Notable v1 → v2 changes handled by the dialect:
 
 | Operation | v1 | v2 |
 |-----------|-----|-----|
-| Folders | `folder list/add/delete`, `--folder` | `mailbox list`, `--mailbox` |
+| List folders | `folder list`, `--folder` | `mailbox list`, `--mailbox` |
+| Create/delete folder | `folder add/delete` | backend API: `imap create/delete` (set `HIMALAYA_BACKEND`) |
 | Search | `envelope list <query>` | `envelope search <query>` |
 | Flags | `flag add <id> <flag…>` | `flag add --flag <F> … <id>` |
 | Move | `message move <target> <id>` | `message move --to <t> --from <src> <id>` |
 | Send | `template send` (stdin) | `message send` (stdin) |
 | JSON | `-o json` | `--json` |
 
-Some v1 features have no v2 equivalent yet (v2 is alpha): `read_email_html` (no `message export`),
-`create_folder` / `delete_folder`, `compose_email` / `draft_reply` (the `template` family is gone),
-and `delete_email` (no `message delete`). On v2 these tools return a clear
+Some v1 features have no v2 equivalent yet (v2 is alpha): `read_email_html` (no `message export`)
+and `compose_email` / `draft_reply` (the `template` family is gone). On v2 these tools return a clear
 *"… is not supported on himalaya v2"* error. Set `HIMALAYA_VERSION=v2` only if you run himalaya v2.
+
+`delete_email` is **batch** (an `ids` array, deleted in one call) on both versions. v1 uses
+`message delete`; v2 has no such command, so it marks the messages `\Deleted`
+(`flag add --flag Deleted`) — the same mark-as-deleted semantics as v1 (expunge to permanently
+remove). It stays gated behind `experimental.enabled` on both.
+
+`create_folder` / `delete_folder` **do** work on v2, routed through the backend API
+(`imap create/delete` by default; set `HIMALAYA_BACKEND` for `gmail`/`jmap`/`msgraph`). Note that
+some providers (Gmail, Proton) reject bare top-level names — use a namespaced path like
+`Labels/My Folder`.
 
 ### Experimental features
 

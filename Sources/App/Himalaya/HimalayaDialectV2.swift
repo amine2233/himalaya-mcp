@@ -12,10 +12,19 @@ public struct HimalayaDialectV2: HimalayaDialect {
 
     private let defaultAccount: String?
     private let defaultFolder: String?
+    /// Backend used for mailbox management (create/delete), which v2 exposes only
+    /// via the backend-specific API (`imap`/`gmail`/`jmap`/`msgraph`). Defaults to
+    /// `imap`; override via `HIMALAYA_BACKEND` for other backends.
+    private let mailboxBackend: String
 
-    public init(defaultAccount: String? = nil, defaultFolder: String? = nil) {
+    public init(
+        defaultAccount: String? = nil,
+        defaultFolder: String? = nil,
+        mailboxBackend: String = "imap"
+    ) {
         self.defaultAccount = defaultAccount
         self.defaultFolder = defaultFolder
+        self.mailboxBackend = mailboxBackend
     }
 
     private func mailboxArgs(_ mailbox: String?) -> [String] {
@@ -60,12 +69,13 @@ public struct HimalayaDialectV2: HimalayaDialect {
         HimalayaInvocation(["mailbox", "list"] + accountArgs(account))
     }
 
-    public func createMailbox(name: String, account: String?) throws -> HimalayaInvocation {
-        throw unsupported("Creating a folder")
+    public func createMailbox(name: String, account: String?) -> HimalayaInvocation {
+        // v2 exposes mailbox creation only via the backend API, e.g. `imap create <name>`.
+        HimalayaInvocation([mailboxBackend, "create", name] + accountArgs(account))
     }
 
-    public func deleteMailbox(name: String, account: String?) throws -> HimalayaInvocation {
-        throw unsupported("Deleting a folder")
+    public func deleteMailbox(name: String, account: String?) -> HimalayaInvocation {
+        HimalayaInvocation([mailboxBackend, "delete", name] + accountArgs(account))
     }
 
     public func setFlags(
@@ -141,8 +151,11 @@ public struct HimalayaDialectV2: HimalayaDialect {
         ids: [String],
         mailbox: String?,
         account: String?
-    ) throws -> HimalayaInvocation {
-        throw unsupported("Deleting messages (delete_email)")
+    ) -> HimalayaInvocation {
+        // v2 has no `message delete`; mark the messages `\Deleted` (batch), which
+        // matches v1's mark-as-deleted behaviour (expunge to permanently remove).
+        HimalayaInvocation(["flag", "add", "--flag", "Deleted"] + ids + mailboxArgs(mailbox) +
+            accountArgs(account))
     }
 
     public func listAccountsJSON() -> HimalayaInvocation {

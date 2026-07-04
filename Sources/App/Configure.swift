@@ -18,7 +18,11 @@ public func configure(_ app: Application) async {
     app.register(HimalayaDialectKey.self) { _ in
         switch settings.version {
         case .v1: HimalayaDialectV1(defaultAccount: settings.account, defaultFolder: settings.folder)
-        case .v2: HimalayaDialectV2(defaultAccount: settings.account, defaultFolder: settings.folder)
+        case .v2: HimalayaDialectV2(
+                defaultAccount: settings.account,
+                defaultFolder: settings.folder,
+                mailboxBackend: settings.backend ?? "imap"
+            )
         }
     }
 

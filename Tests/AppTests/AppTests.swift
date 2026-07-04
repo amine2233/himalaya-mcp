@@ -491,18 +491,16 @@ func v2DialectMapsCommandsAndRejectsUnsupported() {
         standardInput: "raw"
     ))
 
-    // Commands that v2 doesn't offer surface a clear error.
-    #expect(throws: AppError
-        .invalidArgument("Deleting messages (delete_email) is not supported on himalaya v2.")) {
-        try v2.deleteMessages(ids: ["1"], mailbox: nil, account: nil)
-    }
+    // Batch delete marks \Deleted on multiple ids.
+    #expect(try v2.deleteMessages(ids: ["1", "2"], mailbox: nil, account: nil).arguments
+        == ["flag", "add", "--flag", "Deleted", "1", "2"])
+    // A command v2 doesn't offer surfaces a clear error.
     #expect(throws: (any Error).self) { try v2.exportMessage(
         id: "1",
         destination: "/tmp",
         mailbox: nil,
         account: nil
     ) }
-    #expect(throws: (any Error).self) { try v2.createMailbox(name: "X", account: nil) }
 }
 
 // MARK: - Full v1 dialect argument generation
@@ -603,6 +601,15 @@ func v2DialectGeneratesSupportedCommands() throws {
         == ["attachment", "download", "7", "--dir", "/tmp/a"])
     #expect(d.listAccountsJSON().arguments == ["account", "list", "--json"])
     #expect(d.probeAccount("work").arguments == ["mailbox", "list", "--account", "work"])
+    // v2 mailbox management routes through the backend API (default `imap`).
+    #expect(try d.createMailbox(name: "Archive", account: "work").arguments
+        == ["imap", "create", "Archive", "--account", "work"])
+    #expect(try d.deleteMailbox(name: "Old", account: nil).arguments == ["imap", "delete", "Old"])
+    #expect(HimalayaDialectV2(mailboxBackend: "gmail").createMailbox(name: "X", account: nil).arguments
+        == ["gmail", "create", "X"])
+    // Batch delete on v2 = mark \Deleted on multiple ids.
+    #expect(try d.deleteMessages(ids: ["3", "4", "5"], mailbox: "INBOX", account: nil).arguments
+        == ["flag", "add", "--flag", "Deleted", "3", "4", "5", "--mailbox", "INBOX"])
 }
 
 @Test
@@ -617,11 +624,8 @@ func v2DialectRejectsUnsupportedCommands() {
     let d = HimalayaDialectV2()
     for probe: () throws -> Any in [
         { try d.exportMessage(id: "1", destination: "/tmp", mailbox: nil, account: nil) },
-        { try d.createMailbox(name: "X", account: nil) },
-        { try d.deleteMailbox(name: "X", account: nil) },
         { try d.composeTemplate(to: "a", subject: "b", body: "c", account: nil) },
-        { try d.replyTemplate(id: "1", body: nil, all: false, mailbox: nil, account: nil) },
-        { try d.deleteMessages(ids: ["1"], mailbox: nil, account: nil) }
+        { try d.replyTemplate(id: "1", body: nil, all: false, mailbox: nil, account: nil) }
     ] {
         #expect(throws: (any Error).self) { _ = try probe() }
     }
