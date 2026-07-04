@@ -16,9 +16,39 @@ subcommand and as an MCP tool — so the two surfaces can never drift apart.
 
 ## What it does
 
-Each feature is a `Request` that runs an external command (e.g. the `himalaya` CLI) through an
-injected `ExecutableService`, and is exposed both as a CLI subcommand and as an MCP tool. No
-features are wired up yet — add himalaya `Request`s and register them as `ToolHandler`s.
+Each feature is a `Request` that drives the [`himalaya`](https://github.com/pimalaya/himalaya)
+CLI through the injected `HimalayaService`, and is exposed as an MCP tool.
+
+| MCP tool | Arguments | himalaya command |
+|----------|-----------|------------------|
+| `list_emails` | `folder?`, `page_size?`, `page?`, `account?` | `envelope list` |
+| `search_emails` | `query`, `folder?`, `account?` | `envelope list <query…>` |
+| `read_email` | `id`, `folder?`, `account?` | `message read <id> --no-headers` |
+| `read_email_html` | `id`, `folder?`, `account?` | `message export <id>` → HTML part |
+| `list_folders` | `account?` | `folder list` |
+| `create_folder` | `name`, `account?` | `folder add <name>` |
+| `delete_folder` | `name`, `account?` | `folder delete <name>` |
+| `flag_email` | `id`, `flags`, `action` (`add`\|`remove`), `folder?` | `flag add\|remove <id> <flags…>` |
+| `move_email` | `id`, `target_folder`, `folder?`, `account?` | `message move <target> <id>` |
+| `compose_email` | `to`, `subject`, `body`, `attachments?`, `account?` | `message write` → template |
+| `draft_reply` | `id`, `body?`, `reply_all?`, `folder?`, `account?` | `message reply <id>` → template |
+| `send_email` | `template`, `attachments?`, `confirm`, `account?` | `message send <template>` |
+| `list_attachments` | `id`, `folder?`, `account?` | `attachment download` → temp dir |
+| `download_attachment` | `id`, `filename`, `folder?`, `account?` | `attachment download` → temp dir |
+| `delete_email` **(experimental)** | `ids`, `folder?`, `account?` | `message delete <id…>` |
+
+The `himalaya` binary is located via `$HIMALAYA_BIN_PATH` (if set, it wins) and otherwise by
+searching `PATH`. Notes on the less obvious mappings:
+
+- `search_emails` takes a himalaya filter/sort query (e.g.
+  `from alice and subject invoice order by date desc`), split into tokens.
+- `compose_email` / `draft_reply` produce a **template** and never send; feed it to `send_email`,
+  which refuses unless `confirm=true` (sending is irreversible). Attachments are expressed as
+  himalaya MML `<#part>` directives.
+- himalaya has no per-attachment listing/selection, so `list_attachments` and
+  `download_attachment` download into a throwaway directory and inspect the result.
+- `delete_email` is **irreversible** and therefore experimental: it is hidden from `tools/list`
+  (and rejected if called) unless `experimental.enabled` / `EXPERIMENTAL_ENABLED=true` is set.
 
 Experimental features are gated behind a configuration flag — hidden from `--help` / `tools/list`
 and rejected if invoked — unless `experimental.enabled` is on.
