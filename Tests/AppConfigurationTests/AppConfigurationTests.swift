@@ -12,6 +12,24 @@ func experimentalFlagReadsFromEnvironment() {
 }
 
 @Test
+func accountInboxNameReadsFromEnvironmentKey() {
+    let config = ConfigReader(provider: EnvironmentVariablesProvider(environmentVariables: [
+        "HIMALAYA_ACCOUNTS_OUTLOOK_INBOX_NAME": "Inbox",
+        "HIMALAYA_ACCOUNTS_OUTLOOK_PERSONAL_INBOX_NAME": "Inbox"
+    ]))
+    let accounts = ConfigurationLoader.accountFolders(from: config)
+
+    #expect(accounts.inbox(forAccount: "outlook") == "Inbox")
+    #expect(accounts.inbox(forAccount: "outlook_personal") == "Inbox")
+    #expect(accounts.inbox(forAccount: "proton") == nil) // no override configured
+}
+
+@Test
+func accountFolderNamesNoneAlwaysNil() {
+    #expect(AccountFolderNames.none.inbox(forAccount: "anything") == nil)
+}
+
+@Test
 func experimentalFlagDefaultsToFalse() {
     let config = ConfigReader(provider: EnvironmentVariablesProvider(environmentVariables: [:]))
 

@@ -12,14 +12,31 @@ public struct HimalayaDialectV2: HimalayaDialect {
 
     private let defaultAccount: String?
     private let defaultFolder: String?
+    private let accountFolders: AccountFolderNames
 
-    public init(defaultAccount: String? = nil, defaultFolder: String? = nil) {
+    public init(
+        defaultAccount: String? = nil,
+        defaultFolder: String? = nil,
+        accountFolders: AccountFolderNames = .none
+    ) {
         self.defaultAccount = defaultAccount
         self.defaultFolder = defaultFolder
+        self.accountFolders = accountFolders
     }
 
-    private func mailboxArgs(_ mailbox: String?) -> [String] {
-        (mailbox ?? defaultFolder).map { ["--mailbox", $0] } ?? []
+    /// The effective mailbox: an explicit request folder wins; otherwise the
+    /// per-account inbox (for the effective account); otherwise the global default.
+    private func resolvedMailbox(_ mailbox: String?, account: String?) -> String? {
+        if let mailbox { return mailbox }
+        if let account = account ?? defaultAccount,
+           let inbox = accountFolders.inbox(forAccount: account) {
+            return inbox
+        }
+        return defaultFolder
+    }
+
+    private func mailboxArgs(_ mailbox: String?, account: String?) -> [String] {
+        resolvedMailbox(mailbox, account: account).map { ["--mailbox", $0] } ?? []
     }
 
     private func accountArgs(_ account: String?) -> [String] {
@@ -32,19 +49,20 @@ public struct HimalayaDialectV2: HimalayaDialect {
         page: Int?,
         account: String?
     ) -> HimalayaInvocation {
-        var args = ["envelope", "list"] + mailboxArgs(mailbox)
+        var args = ["envelope", "list"] + mailboxArgs(mailbox, account: account)
         if let pageSize { args += ["--page-size", String(pageSize)] }
         if let page { args += ["--page", String(page)] }
         return HimalayaInvocation(args + accountArgs(account))
     }
 
     public func searchEnvelopes(query: String, mailbox: String?, account: String?) -> HimalayaInvocation {
-        let args = ["envelope", "search"] + mailboxArgs(mailbox) + accountArgs(account)
+        let args = ["envelope", "search"] + mailboxArgs(mailbox, account: account) + accountArgs(account)
         return HimalayaInvocation(args + query.split(whereSeparator: \.isWhitespace).map(String.init))
     }
 
     public func readMessage(id: String, mailbox: String?, account: String?) -> HimalayaInvocation {
-        HimalayaInvocation(["message", "read", id] + mailboxArgs(mailbox) + accountArgs(account))
+        HimalayaInvocation(["message", "read", id] + mailboxArgs(mailbox, account: account) +
+            accountArgs(account))
     }
 
     public func exportMessage(
@@ -77,7 +95,10 @@ public struct HimalayaDialectV2: HimalayaDialect {
     ) -> HimalayaInvocation {
         // v2: `flag add|remove --flag <F> ... <MESSAGE-IDS>`
         let flagArgs = flags.flatMap { ["--flag", $0] }
-        return HimalayaInvocation(["flag", add ? "add" : "remove"] + flagArgs + [id] + mailboxArgs(mailbox) +
+        return HimalayaInvocation(["flag", add ? "add" : "remove"] + flagArgs + [id] + mailboxArgs(
+            mailbox,
+            account: account
+        ) +
             accountArgs(account))
     }
 
@@ -89,7 +110,7 @@ public struct HimalayaDialectV2: HimalayaDialect {
     ) -> HimalayaInvocation {
         // v2: `message move --to <NAME> [--from <NAME>] <MESSAGE-IDS>`
         var args = ["message", "move", "--to", target]
-        if let from = mailbox ?? defaultFolder { args += ["--from", from] }
+        if let from = resolvedMailbox(mailbox, account: account) { args += ["--from", from] }
         return HimalayaInvocation(args + [id] + accountArgs(account))
     }
 
@@ -123,7 +144,10 @@ public struct HimalayaDialectV2: HimalayaDialect {
         mailbox: String?,
         account: String?
     ) -> HimalayaInvocation {
-        HimalayaInvocation(["attachment", "download", id, "--dir", destination] + mailboxArgs(mailbox) +
+        HimalayaInvocation(["attachment", "download", id, "--dir", destination] + mailboxArgs(
+            mailbox,
+            account: account
+        ) +
             accountArgs(account))
     }
 
@@ -133,7 +157,10 @@ public struct HimalayaDialectV2: HimalayaDialect {
         mailbox: String?,
         account: String?
     ) -> HimalayaInvocation {
-        HimalayaInvocation(["attachment", "download", id, "--dir", destination] + mailboxArgs(mailbox) +
+        HimalayaInvocation(["attachment", "download", id, "--dir", destination] + mailboxArgs(
+            mailbox,
+            account: account
+        ) +
             accountArgs(account))
     }
 

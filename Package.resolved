@@ -1,5 +1,5 @@
 {
-  "originHash" : "35869b2c47b6d6aea6d2b6ca9989b799d56756c485ced453cbc910a23c9c7013",
+  "originHash" : "3b53e48fb0a551966978021cea3b1b698b476f636947c22792b69bdb6682f769",
   "pins" : [
     {
       "identity" : "cascade-kit",
@@ -107,6 +107,15 @@
       "state" : {
         "revision" : "7502b711c92a17741fa625d722b0ccbd595d8ed1",
         "version" : "1.7.2"
+      }
+    },
+    {
+      "identity" : "yams",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/jpsim/Yams",
+      "state" : {
+        "revision" : "a27b21e0c81c5bf42049b897a62aaf387e80f279",
+        "version" : "6.2.2"
       }
     }
   ],
