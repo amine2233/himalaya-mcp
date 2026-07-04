@@ -354,6 +354,94 @@ func executableServiceRunsFastCommandWithinTimeout() throws {
 }
 
 @Test
+func claudeDesktopInstallAddsEntryAndPreservesOtherKeys() throws {
+    try withTemporaryDirectory { root in
+        let configURL = root.appendingPathComponent("claude_desktop_config.json")
+        try Data(#"{"mcpServers":{"other":{"command":"x"}},"preferences":{"keep":true}}"#.utf8)
+            .write(to: configURL)
+
+        let setup = ClaudeDesktopSetup(configURL: configURL)
+        let entry = ClaudeDesktopSetup.ServerEntry(
+            command: "/bin/himalaya-mcp", args: ["serve"], env: ["HIMALAYA_FOLDER": "INBOX"]
+        )
+        let addOutcome = try setup.install(entry)
+        #expect(addOutcome == .added)
+
+        let root = try JSONSerialization.jsonObject(with: Data(contentsOf: configURL)) as! [String: Any]
+        let servers = root["mcpServers"] as! [String: Any]
+        let himalaya = servers["himalaya-mcp"] as! [String: Any]
+        #expect(himalaya["command"] as? String == "/bin/himalaya-mcp")
+        #expect(himalaya["args"] as? [String] == ["serve"])
+        #expect(servers["other"] != nil) // other server kept
+        #expect((root["preferences"] as? [String: Any])?["keep"] as? Bool == true) // prefs kept
+    }
+}
+
+@Test
+func claudeDesktopInstallCreatesFileWhenMissing() throws {
+    try withTemporaryDirectory { root in
+        let configURL = root.appendingPathComponent("nested/claude_desktop_config.json")
+        let setup = ClaudeDesktopSetup(configURL: configURL)
+
+        let entry = ClaudeDesktopSetup.ServerEntry(command: "/bin/himalaya-mcp", args: ["serve"], env: [:])
+        let addOutcome = try setup.install(entry)
+        #expect(addOutcome == .added)
+        #expect(FileManager.default.fileExists(atPath: configURL.path))
+        // Re-installing updates rather than adds.
+        let updateOutcome = try setup.install(entry)
+        #expect(updateOutcome == .updated)
+    }
+}
+
+@Test
+func claudeDesktopRemoveDeletesOnlyOurEntry() throws {
+    try withTemporaryDirectory { root in
+        let configURL = root.appendingPathComponent("claude_desktop_config.json")
+        try Data(#"{"mcpServers":{"himalaya-mcp":{"command":"x"},"other":{"command":"y"}}}"#.utf8)
+            .write(to: configURL)
+        let setup = ClaudeDesktopSetup(configURL: configURL)
+
+        let removeOutcome = try setup.remove()
+        #expect(removeOutcome == .removed)
+        let servers = try (JSONSerialization.jsonObject(with: Data(contentsOf: configURL))
+            as! [String: Any])["mcpServers"] as! [String: Any]
+        #expect(servers["himalaya-mcp"] == nil)
+        #expect(servers["other"] != nil)
+
+        let secondRemove = try setup.remove()
+        #expect(secondRemove == .notPresent) // already gone
+    }
+}
+
+@Test
+func claudeDesktopCheckReportsHealthAndProblems() throws {
+    try withTemporaryDirectory { root in
+        // Stage a real executable to serve as both command and himalaya binary.
+        let bin = try stageHimalaya(in: root.appendingPathComponent("bin"))
+        let configURL = root.appendingPathComponent("claude_desktop_config.json")
+        let setup = ClaudeDesktopSetup(configURL: configURL)
+
+        // Missing config → not healthy.
+        let missingCheck = try setup.check()
+        #expect(missingCheck.isHealthy == false)
+
+        // Healthy after installing with runnable command + HIMALAYA_BIN_PATH.
+        try setup.install(.init(command: bin, args: ["serve"], env: ["HIMALAYA_BIN_PATH": bin]))
+        let healthy = try setup.check()
+        #expect(healthy.isHealthy)
+        #expect(healthy.entryPresent)
+        #expect(healthy.commandRunnable)
+        #expect(healthy.himalayaRunnable)
+
+        // Broken command path → problem reported.
+        try setup.install(.init(command: "/nope/himalaya-mcp", args: ["serve"], env: [:]))
+        let broken = try setup.check()
+        #expect(broken.isHealthy == false)
+        #expect(broken.commandRunnable == false)
+    }
+}
+
+@Test
 func executableServiceResolvesFromContainer() throws {
     let app = Application()
     app.register(ExecutableServiceKey.self) { _ in StubExecutable(output: "himalaya 1.0.0") }

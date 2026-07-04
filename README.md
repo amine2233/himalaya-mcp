@@ -254,7 +254,21 @@ Or use a `.mcp.json` (this repo's is git-ignored, since it holds a machine-speci
 
 ### Claude Desktop integration
 
-Add the server to Claude Desktop's config, then restart Claude Desktop:
+**Easiest — let the CLI do it.** After installing the binary, run:
+
+```bash
+himalaya-mcp setup            # add/update the himalaya-mcp entry in Claude Desktop's config
+himalaya-mcp setup --check    # verify the entry (paths exist & are runnable); non-zero exit if not
+himalaya-mcp setup --remove   # remove the entry
+```
+
+`setup` writes an entry pointing at the running binary, resolves `himalaya` (via `PATH` /
+`$HIMALAYA_BIN_PATH`) and bakes it into the entry's `env` so Claude Desktop — which doesn't inherit
+your shell `PATH` — can find it. It merges into the existing config (other servers/preferences are
+preserved) and, by default, targets the OS location below (override with `--config <path>`). Restart
+Claude Desktop afterward.
+
+**Manual alternative.** Add the server to Claude Desktop's config yourself, then restart it:
 
 - **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
 - **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
