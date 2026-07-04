@@ -17,7 +17,13 @@ public struct ComposeEmailRequest: Request {
         /// Account override. `nil` uses the configured default account.
         public let account: String?
 
-        public init(to: String, subject: String, body: String, attachments: [String]? = nil, account: String? = nil) {
+        public init(
+            to: String,
+            subject: String,
+            body: String,
+            attachments: [String]? = nil,
+            account: String? = nil
+        ) {
             self.to = to
             self.subject = subject
             self.body = body

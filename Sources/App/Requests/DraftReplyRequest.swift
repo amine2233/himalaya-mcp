@@ -17,7 +17,13 @@ public struct DraftReplyRequest: Request {
         /// Account override. `nil` uses the configured default account.
         public let account: String?
 
-        public init(id: String, body: String? = nil, replyAll: Bool? = nil, folder: String? = nil, account: String? = nil) {
+        public init(
+            id: String,
+            body: String? = nil,
+            replyAll: Bool? = nil,
+            folder: String? = nil,
+            account: String? = nil
+        ) {
             self.id = id
             self.body = body
             self.replyAll = replyAll

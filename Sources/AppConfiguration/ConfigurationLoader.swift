@@ -15,7 +15,7 @@ public enum ConfigurationLoader {
     /// Resolves the feature flags from the environment layered over an optional
     /// JSON config file (env wins). The file provider is asynchronous, hence `async`.
     public static func resolve() async -> FeatureFlags {
-        FeatureFlags(config: await configReader())
+        await FeatureFlags(config: configReader())
     }
 
     /// Resolves both the feature flags and the himalaya settings from a single
@@ -40,6 +40,7 @@ public enum ConfigurationLoader {
     private static func jsonFileProvider() async -> (any ConfigProvider)? {
         let path = ProcessInfo.processInfo.environment["HIMALAYA_MCP_CONFIG"] ?? defaultConfigFileName
         guard FileManager.default.fileExists(atPath: path) else { return nil }
+
         do {
             return try await FileProvider<JSONSnapshot>(filePath: FilePath(path))
         } catch {

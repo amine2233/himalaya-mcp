@@ -35,6 +35,7 @@ public struct ListAttachmentsRequest: Request {
             guard !files.isEmpty else {
                 return "No attachments found for message \(input.id)."
             }
+
             return files.map { url in
                 let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
                 return "\(url.lastPathComponent) (\(size) bytes)"

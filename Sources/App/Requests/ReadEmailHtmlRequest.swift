@@ -35,6 +35,7 @@ public struct ReadEmailHtmlRequest: Request {
             guard let html = try Self.htmlContents(in: directory) else {
                 return "No HTML part found for message \(input.id)."
             }
+
             return html.trimmingCharacters(in: .whitespacesAndNewlines)
         }
     }
@@ -50,6 +51,7 @@ public struct ReadEmailHtmlRequest: Request {
         var matches: [String] = []
         for url in candidates {
             guard let content = try? String(contentsOf: url, encoding: .utf8) else { continue }
+
             if !byExtension.isEmpty || content.lowercased().contains("<html") {
                 matches.append(content)
             }

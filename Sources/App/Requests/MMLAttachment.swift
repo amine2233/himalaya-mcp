@@ -14,6 +14,7 @@ enum MMLAttachment {
     /// `body` unchanged when there are no attachments.
     static func appended(to body: String, paths: [String]) -> String {
         guard !paths.isEmpty else { return body }
+
         return body + "\n\n" + directives(for: paths)
     }
 }

@@ -1,21 +1,26 @@
-import Testing
+import AppConfiguration
+import CascadeKit
 import Foundation
 import Synchronization
-import CascadeKit
-import AppConfiguration
+import Testing
 @testable import App
 
 /// A stub executable service so requests can be tested without shelling out to `himalaya`.
 private struct StubExecutable: ExecutableService {
     let output: String
-    func run(executable: String, arguments: [String]) throws -> String { output }
+    func run(executable: String, arguments: [String]) throws -> String {
+        output
+    }
 }
 
 /// An executable stub that records the last `(executable, arguments)` it was asked to run.
 private final class RecordingExecutable: ExecutableService {
     let calls = Mutex<[(executable: String, arguments: [String])]>([])
     let output: String
-    init(output: String) { self.output = output }
+    init(output: String) {
+        self.output = output
+    }
+
     func run(executable: String, arguments: [String]) throws -> String {
         calls.withLock { $0.append((executable, arguments)) }
         return output
@@ -26,8 +31,14 @@ private final class RecordingExecutable: ExecutableService {
 private final class RecordingHimalaya: HimalayaService {
     let calls = Mutex<[[String]]>([])
     let output: String
-    init(output: String = "") { self.output = output }
-    func resolveExecutablePath() throws -> String { "/usr/local/bin/himalaya" }
+    init(output: String = "") {
+        self.output = output
+    }
+
+    func resolveExecutablePath() throws -> String {
+        "/usr/local/bin/himalaya"
+    }
+
     func run(arguments: [String]) throws -> String {
         calls.withLock { $0.append(arguments) }
         return output
@@ -42,7 +53,8 @@ private func appWithRecordingHimalaya(output: String = "") -> (Application, Reco
     return (app, himalaya)
 }
 
-@Test func listEmailsBuildsArgumentsWithAllOptions() async throws {
+@Test
+func listEmailsBuildsArgumentsWithAllOptions() async throws {
     let (app, himalaya) = appWithRecordingHimalaya(output: "envelopes")
     let input = ListEmailsRequest.Input(folder: "Archive", pageSize: 20, page: 2, account: "work")
 
@@ -54,7 +66,8 @@ private func appWithRecordingHimalaya(output: String = "") -> (Application, Reco
     ]])
 }
 
-@Test func listEmailsOmitsUnsetOptions() async throws {
+@Test
+func listEmailsOmitsUnsetOptions() async throws {
     let (app, himalaya) = appWithRecordingHimalaya()
 
     _ = try await ListEmailsRequest().execute(ListEmailsRequest.Input(), in: app)
@@ -62,7 +75,8 @@ private func appWithRecordingHimalaya(output: String = "") -> (Application, Reco
     #expect(himalaya.calls.withLock { $0 } == [["envelope", "list"]])
 }
 
-@Test func listEmailsInputDecodesSnakeCasePageSize() throws {
+@Test
+func listEmailsInputDecodesSnakeCasePageSize() throws {
     let data = Data(#"{"page_size":50,"page":3}"#.utf8)
     let input = try JSONDecoder().decode(ListEmailsRequest.Input.self, from: data)
 
@@ -70,7 +84,8 @@ private func appWithRecordingHimalaya(output: String = "") -> (Application, Reco
     #expect(input.page == 3)
 }
 
-@Test func searchEmailsSplitsQueryIntoTokens() async throws {
+@Test
+func searchEmailsSplitsQueryIntoTokens() async throws {
     let (app, himalaya) = appWithRecordingHimalaya()
     let input = SearchEmailsRequest.Input(query: "from alice and subject invoice", folder: "INBOX")
 
@@ -81,7 +96,8 @@ private func appWithRecordingHimalaya(output: String = "") -> (Application, Reco
     ]])
 }
 
-@Test func readEmailUsesNoHeaders() async throws {
+@Test
+func readEmailUsesNoHeaders() async throws {
     let (app, himalaya) = appWithRecordingHimalaya(output: "body")
     let input = ReadEmailRequest.Input(id: "42", account: "work")
 
@@ -93,10 +109,14 @@ private func appWithRecordingHimalaya(output: String = "") -> (Application, Reco
     ]])
 }
 
-@Test func readEmailHtmlExportsAndReturnsHtmlPart() async throws {
+@Test
+func readEmailHtmlExportsAndReturnsHtmlPart() async throws {
     let (app, himalaya) = appWithRecordingHimalaya()
 
-    let output = try await ReadEmailHtmlRequest().execute(ReadEmailHtmlRequest.Input(id: "7", folder: "INBOX"), in: app)
+    let output = try await ReadEmailHtmlRequest().execute(
+        ReadEmailHtmlRequest.Input(id: "7", folder: "INBOX"),
+        in: app
+    )
 
     // The stub writes no files, so no HTML part is found — but the export command
     // must have been issued with a --destination temp directory.
@@ -108,7 +128,8 @@ private func appWithRecordingHimalaya(output: String = "") -> (Application, Reco
     #expect(call.contains("INBOX"))
 }
 
-@Test func listFoldersBuildsArguments() async throws {
+@Test
+func listFoldersBuildsArguments() async throws {
     let (app, himalaya) = appWithRecordingHimalaya(output: "folders")
     let output = try await ListFoldersRequest().execute(ListFoldersRequest.Input(account: "work"), in: app)
 
@@ -116,21 +137,27 @@ private func appWithRecordingHimalaya(output: String = "") -> (Application, Reco
     #expect(himalaya.calls.withLock { $0 } == [["folder", "list", "--account", "work"]])
 }
 
-@Test func createFolderBuildsArguments() async throws {
+@Test
+func createFolderBuildsArguments() async throws {
     let (app, himalaya) = appWithRecordingHimalaya()
     _ = try await CreateFolderRequest().execute(CreateFolderRequest.Input(name: "Archive"), in: app)
 
     #expect(himalaya.calls.withLock { $0 } == [["folder", "add", "Archive"]])
 }
 
-@Test func deleteFolderBuildsArguments() async throws {
+@Test
+func deleteFolderBuildsArguments() async throws {
     let (app, himalaya) = appWithRecordingHimalaya()
-    _ = try await DeleteFolderRequest().execute(DeleteFolderRequest.Input(name: "Old", account: "work"), in: app)
+    _ = try await DeleteFolderRequest().execute(
+        DeleteFolderRequest.Input(name: "Old", account: "work"),
+        in: app
+    )
 
     #expect(himalaya.calls.withLock { $0 } == [["folder", "delete", "Old", "--account", "work"]])
 }
 
-@Test func flagEmailAddsFlags() async throws {
+@Test
+func flagEmailAddsFlags() async throws {
     let (app, himalaya) = appWithRecordingHimalaya()
     let input = FlagEmailRequest.Input(id: "9", flags: "Seen Flagged", action: .add, folder: "INBOX")
     _ = try await FlagEmailRequest().execute(input, in: app)
@@ -140,21 +167,30 @@ private func appWithRecordingHimalaya(output: String = "") -> (Application, Reco
     ]])
 }
 
-@Test func flagEmailRemovesFlags() async throws {
+@Test
+func flagEmailRemovesFlags() async throws {
     let (app, himalaya) = appWithRecordingHimalaya()
-    _ = try await FlagEmailRequest().execute(FlagEmailRequest.Input(id: "9", flags: "Seen", action: .remove), in: app)
+    _ = try await FlagEmailRequest().execute(
+        FlagEmailRequest.Input(id: "9", flags: "Seen", action: .remove),
+        in: app
+    )
 
     #expect(himalaya.calls.withLock { $0 } == [["flag", "remove", "9", "Seen"]])
 }
 
-@Test func flagEmailRejectsEmptyFlags() async throws {
+@Test
+func flagEmailRejectsEmptyFlags() async throws {
     let (app, _) = appWithRecordingHimalaya()
     await #expect(throws: AppError.invalidArgument("flag_email requires at least one flag.")) {
-        try await FlagEmailRequest().execute(FlagEmailRequest.Input(id: "9", flags: "   ", action: .add), in: app)
+        try await FlagEmailRequest().execute(
+            FlagEmailRequest.Input(id: "9", flags: "   ", action: .add),
+            in: app
+        )
     }
 }
 
-@Test func moveEmailPutsTargetBeforeId() async throws {
+@Test
+func moveEmailPutsTargetBeforeId() async throws {
     let (app, himalaya) = appWithRecordingHimalaya()
     let input = MoveEmailRequest.Input(id: "3", targetFolder: "Archive", folder: "INBOX", account: "work")
     _ = try await MoveEmailRequest().execute(input, in: app)
@@ -164,14 +200,16 @@ private func appWithRecordingHimalaya(output: String = "") -> (Application, Reco
     ]])
 }
 
-@Test func moveEmailInputDecodesTargetFolderSnakeCase() throws {
+@Test
+func moveEmailInputDecodesTargetFolderSnakeCase() throws {
     let data = Data(#"{"id":"3","target_folder":"Archive"}"#.utf8)
     let input = try JSONDecoder().decode(MoveEmailRequest.Input.self, from: data)
 
     #expect(input.targetFolder == "Archive")
 }
 
-@Test func composeEmailBuildsHeadersAndBody() async throws {
+@Test
+func composeEmailBuildsHeadersAndBody() async throws {
     let (app, himalaya) = appWithRecordingHimalaya(output: "template")
     let input = ComposeEmailRequest.Input(to: "a@b.c", subject: "Hi", body: "Hello")
     let output = try await ComposeEmailRequest().execute(input, in: app)
@@ -182,9 +220,15 @@ private func appWithRecordingHimalaya(output: String = "") -> (Application, Reco
     ]])
 }
 
-@Test func composeEmailAppendsAttachmentMML() async throws {
+@Test
+func composeEmailAppendsAttachmentMML() async throws {
     let (app, himalaya) = appWithRecordingHimalaya()
-    let input = ComposeEmailRequest.Input(to: "a@b.c", subject: "Hi", body: "Hello", attachments: ["/tmp/report.pdf"])
+    let input = ComposeEmailRequest.Input(
+        to: "a@b.c",
+        subject: "Hi",
+        body: "Hello",
+        attachments: ["/tmp/report.pdf"]
+    )
     _ = try await ComposeEmailRequest().execute(input, in: app)
 
     let body = try #require(himalaya.calls.withLock { $0 }.first?.last)
@@ -192,7 +236,8 @@ private func appWithRecordingHimalaya(output: String = "") -> (Application, Reco
     #expect(body.contains(#"<#part filename="/tmp/report.pdf" disposition=attachment><#/part>"#))
 }
 
-@Test func draftReplyUsesAllFlag() async throws {
+@Test
+func draftReplyUsesAllFlag() async throws {
     let (app, himalaya) = appWithRecordingHimalaya()
     let input = DraftReplyRequest.Input(id: "5", body: "Thanks", replyAll: true, folder: "INBOX")
     _ = try await DraftReplyRequest().execute(input, in: app)
@@ -202,14 +247,16 @@ private func appWithRecordingHimalaya(output: String = "") -> (Application, Reco
     ]])
 }
 
-@Test func draftReplyOmitsAllFlagWhenNotRequested() async throws {
+@Test
+func draftReplyOmitsAllFlagWhenNotRequested() async throws {
     let (app, himalaya) = appWithRecordingHimalaya()
     _ = try await DraftReplyRequest().execute(DraftReplyRequest.Input(id: "5"), in: app)
 
     #expect(himalaya.calls.withLock { $0 } == [["message", "reply", "5"]])
 }
 
-@Test func sendEmailRefusesWithoutConfirmation() async throws {
+@Test
+func sendEmailRefusesWithoutConfirmation() async throws {
     let (app, himalaya) = appWithRecordingHimalaya()
     let output = try await SendEmailRequest().execute(SendEmailRequest.Input(template: "raw"), in: app)
 
@@ -218,7 +265,8 @@ private func appWithRecordingHimalaya(output: String = "") -> (Application, Reco
     #expect(himalaya.calls.withLock { $0 }.isEmpty)
 }
 
-@Test func sendEmailSendsWhenConfirmed() async throws {
+@Test
+func sendEmailSendsWhenConfirmed() async throws {
     let (app, himalaya) = appWithRecordingHimalaya(output: "")
     let input = SendEmailRequest.Input(template: "raw message", confirm: true, account: "work")
     let output = try await SendEmailRequest().execute(input, in: app)
@@ -229,7 +277,8 @@ private func appWithRecordingHimalaya(output: String = "") -> (Application, Reco
     ]])
 }
 
-@Test func deleteEmailBuildsArgumentsWithMultipleIds() async throws {
+@Test
+func deleteEmailBuildsArgumentsWithMultipleIds() async throws {
     let (app, himalaya) = appWithRecordingHimalaya(output: "")
     let input = DeleteEmailRequest.Input(ids: ["3", "4"], folder: "INBOX", account: "work")
     let output = try await DeleteEmailRequest().execute(input, in: app)
@@ -240,7 +289,8 @@ private func appWithRecordingHimalaya(output: String = "") -> (Application, Reco
     ]])
 }
 
-@Test func deleteEmailRejectsEmptyIds() async throws {
+@Test
+func deleteEmailRejectsEmptyIds() async throws {
     let (app, himalaya) = appWithRecordingHimalaya()
     await #expect(throws: AppError.invalidArgument("delete_email requires at least one id.")) {
         try await DeleteEmailRequest().execute(DeleteEmailRequest.Input(ids: [""]), in: app)
@@ -248,28 +298,32 @@ private func appWithRecordingHimalaya(output: String = "") -> (Application, Reco
     #expect(himalaya.calls.withLock { $0 }.isEmpty)
 }
 
-@Test func defaultAccountInjectedWhenAbsent() {
+@Test
+func defaultAccountInjectedWhenAbsent() {
     let args = HimalayaServiceDefault.applyingDefaults(
         to: ["envelope", "list"], account: "work", folder: nil
     )
     #expect(args == ["envelope", "list", "--account", "work"])
 }
 
-@Test func defaultAccountNotInjectedWhenExplicit() {
+@Test
+func defaultAccountNotInjectedWhenExplicit() {
     let args = HimalayaServiceDefault.applyingDefaults(
         to: ["envelope", "list", "--account", "perso"], account: "work", folder: nil
     )
     #expect(args == ["envelope", "list", "--account", "perso"])
 }
 
-@Test func defaultFolderInjectedForFolderAcceptingCommand() {
+@Test
+func defaultFolderInjectedForFolderAcceptingCommand() {
     let args = HimalayaServiceDefault.applyingDefaults(
         to: ["message", "read", "5"], account: nil, folder: "Archive"
     )
     #expect(args == ["message", "read", "5", "--folder", "Archive"])
 }
 
-@Test func defaultFolderNotInjectedForFolderSubcommands() {
+@Test
+func defaultFolderNotInjectedForFolderSubcommands() {
     // `folder list`, `message write` and `message send` don't accept --folder.
     #expect(HimalayaServiceDefault.commandAcceptsFolder(["folder", "list"]) == false)
     #expect(HimalayaServiceDefault.commandAcceptsFolder(["message", "write"]) == false)
@@ -280,10 +334,11 @@ private func appWithRecordingHimalaya(output: String = "") -> (Application, Reco
     let args = HimalayaServiceDefault.applyingDefaults(
         to: ["folder", "list"], account: nil, folder: "Archive"
     )
-    #expect(args == ["folder", "list"])  // no --folder added
+    #expect(args == ["folder", "list"]) // no --folder added
 }
 
-@Test func executableServiceTimesOutLongCommand() {
+@Test
+func executableServiceTimesOutLongCommand() {
     let service = ExecutableServiceDefault(timeoutMilliseconds: 100)
 
     #expect(throws: AppError.commandTimedOut(milliseconds: 100)) {
@@ -291,13 +346,15 @@ private func appWithRecordingHimalaya(output: String = "") -> (Application, Reco
     }
 }
 
-@Test func executableServiceRunsFastCommandWithinTimeout() throws {
+@Test
+func executableServiceRunsFastCommandWithinTimeout() throws {
     let service = ExecutableServiceDefault(timeoutMilliseconds: 10_000)
     let output = try service.run(executable: "echo", arguments: ["hello"])
     #expect(output == "hello")
 }
 
-@Test func executableServiceResolvesFromContainer() throws {
+@Test
+func executableServiceResolvesFromContainer() throws {
     let app = Application()
     app.register(ExecutableServiceKey.self) { _ in StubExecutable(output: "himalaya 1.0.0") }
 
@@ -325,7 +382,8 @@ private func stageHimalaya(in directory: URL) throws -> String {
     return file.path
 }
 
-@Test func himalayaOverridePathTakesPriority() throws {
+@Test
+func himalayaOverridePathTakesPriority() throws {
     try withTemporaryDirectory { root in
         let overridePath = try stageHimalaya(in: root.appendingPathComponent("custom"))
         let pathDir = root.appendingPathComponent("bin")
@@ -344,7 +402,8 @@ private func stageHimalaya(in directory: URL) throws -> String {
     }
 }
 
-@Test func himalayaOverrideMustBeExecutable() throws {
+@Test
+func himalayaOverrideMustBeExecutable() throws {
     try withTemporaryDirectory { root in
         let missing = root.appendingPathComponent("nope/himalaya").path
         let service = HimalayaServiceDefault(
@@ -358,7 +417,8 @@ private func stageHimalaya(in directory: URL) throws -> String {
     }
 }
 
-@Test func himalayaFallsBackToPathSearchInOrder() throws {
+@Test
+func himalayaFallsBackToPathSearchInOrder() throws {
     try withTemporaryDirectory { root in
         let first = root.appendingPathComponent("first")
         let second = root.appendingPathComponent("second")
@@ -376,7 +436,8 @@ private func stageHimalaya(in directory: URL) throws -> String {
     }
 }
 
-@Test func himalayaNotFoundThrowsWithSearchedPaths() throws {
+@Test
+func himalayaNotFoundThrowsWithSearchedPaths() throws {
     try withTemporaryDirectory { root in
         let a = root.appendingPathComponent("a")
         let b = root.appendingPathComponent("b")
@@ -392,7 +453,8 @@ private func stageHimalaya(in directory: URL) throws -> String {
     }
 }
 
-@Test func himalayaRunForwardsResolvedPathAndArguments() throws {
+@Test
+func himalayaRunForwardsResolvedPathAndArguments() throws {
     try withTemporaryDirectory { root in
         let binDir = root.appendingPathComponent("bin")
         let expected = try stageHimalaya(in: binDir)
@@ -412,7 +474,8 @@ private func stageHimalaya(in directory: URL) throws -> String {
     }
 }
 
-@Test func himalayaServiceRegistrationResolves() async {
+@Test
+func himalayaServiceRegistrationResolves() async {
     let app = Application()
     await configure(app)
 
@@ -420,7 +483,8 @@ private func stageHimalaya(in directory: URL) throws -> String {
     #expect(service is HimalayaServiceDefault)
 }
 
-@Test func featureFlagsRegistrationResolves() {
+@Test
+func featureFlagsRegistrationResolves() {
     let app = Application()
     app.register(FeatureFlagsServiceKey.self, scope: .transient) { _ in
         FeatureFlags(experimentalEnabled: true)
@@ -429,7 +493,8 @@ private func stageHimalaya(in directory: URL) throws -> String {
     #expect(app.make(FeatureFlagsServiceKey.self).experimentalEnabled == true)
 }
 
-@Test func singletonIsCachedAndTransientIsRebuilt() {
+@Test
+func singletonIsCachedAndTransientIsRebuilt() {
     let singletonBuilds = Mutex(0)
     let transientBuilds = Mutex(0)
     let app = Application()
@@ -448,6 +513,6 @@ private func stageHimalaya(in directory: URL) throws -> String {
     _ = app.make(FeatureFlagsServiceKey.self)
     _ = app.make(FeatureFlagsServiceKey.self)
 
-    #expect(singletonBuilds.withLock { $0 } == 1)   // built once, then cached
-    #expect(transientBuilds.withLock { $0 } == 2)   // rebuilt each time
+    #expect(singletonBuilds.withLock { $0 } == 1) // built once, then cached
+    #expect(transientBuilds.withLock { $0 } == 2) // rebuilt each time
 }

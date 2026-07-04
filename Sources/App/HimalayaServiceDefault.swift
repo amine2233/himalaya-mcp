@@ -53,6 +53,7 @@ public struct HimalayaServiceDefault: HimalayaService {
             guard Self.isExecutableFile(atPath: override) else {
                 throw AppError.himalayaExecutableNotFound(searchedPaths: [override])
             }
+
             return override
         }
 
@@ -72,7 +73,7 @@ public struct HimalayaServiceDefault: HimalayaService {
 
     public func run(arguments: [String]) throws -> String {
         let effective = Self.applyingDefaults(to: arguments, account: defaultAccount, folder: defaultFolder)
-        return try executable.run(executable: try resolveExecutablePath(), arguments: effective)
+        return try executable.run(executable: resolveExecutablePath(), arguments: effective)
     }
 
     /// Weaves the configured default account/folder into `arguments`, leaving an

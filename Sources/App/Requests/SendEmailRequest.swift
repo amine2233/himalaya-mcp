@@ -14,7 +14,12 @@ public struct SendEmailRequest: Request {
         /// Account override. `nil` uses the configured default account.
         public let account: String?
 
-        public init(template: String, attachments: [String]? = nil, confirm: Bool? = nil, account: String? = nil) {
+        public init(
+            template: String,
+            attachments: [String]? = nil,
+            confirm: Bool? = nil,
+            account: String? = nil
+        ) {
             self.template = template
             self.attachments = attachments
             self.confirm = confirm

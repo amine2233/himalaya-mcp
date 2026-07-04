@@ -18,7 +18,7 @@ public enum AppError: Error, Equatable, Sendable {
 extension AppError: CustomStringConvertible {
     public var description: String {
         switch self {
-        case .himalayaExecutableNotFound(let searchedPaths):
+        case let .himalayaExecutableNotFound(searchedPaths):
             let locations = searchedPaths.isEmpty
                 ? "no candidates (PATH is empty)"
                 : searchedPaths.joined(separator: ", ")
@@ -26,9 +26,9 @@ extension AppError: CustomStringConvertible {
             himalaya executable not found. Set \(HimalayaServiceDefault.pathOverrideEnvironmentKey) \
             to its absolute path, or add it to PATH (searched: \(locations)).
             """
-        case .invalidArgument(let reason):
+        case let .invalidArgument(reason):
             return reason
-        case .commandTimedOut(let milliseconds):
+        case let .commandTimedOut(milliseconds):
             return "himalaya command timed out after \(milliseconds) ms."
         }
     }

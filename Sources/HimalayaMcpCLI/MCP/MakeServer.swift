@@ -34,6 +34,7 @@ func makeServer(application: Application) async -> Server {
                 isError: true
             )
         }
+
         let output = try await handler.call(params, application)
         return .init(
             content: [.text(text: output, annotations: nil, _meta: nil)],

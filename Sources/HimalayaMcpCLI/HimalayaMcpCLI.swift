@@ -19,7 +19,7 @@ struct HimalayaMcpCLI: AsyncParsableCommand {
             abstract: "A himalaya helper usable both as a CLI and as an MCP server.",
             version: "0.1.0",
             subcommands: [
-                ServeCommand.self,
+                ServeCommand.self
             ],
             defaultSubcommand: ServeCommand.self
         )

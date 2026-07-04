@@ -13,7 +13,7 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.2.0"),
         .package(url: "https://github.com/modelcontextprotocol/swift-sdk.git", from: "0.11.0"),
         .package(url: "https://github.com/apple/swift-configuration.git", from: "1.0.0"),
-        .package(url: "https://github.com/amine2233/cascade-kit.git", from: "1.0.0"),
+        .package(url: "https://github.com/amine2233/cascade-kit.git", from: "1.0.0")
     ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
@@ -26,7 +26,7 @@ let package = Package(
             name: "App",
             dependencies: [
                 "AppConfiguration",
-                .product(name: "CascadeKit", package: "cascade-kit"),
+                .product(name: "CascadeKit", package: "cascade-kit")
             ]
         ),
         // Reusable configuration module: swift-configuration setup + feature flags.
@@ -34,7 +34,7 @@ let package = Package(
         .target(
             name: "AppConfiguration",
             dependencies: [
-                .product(name: "Configuration", package: "swift-configuration"),
+                .product(name: "Configuration", package: "swift-configuration")
             ]
         ),
         .executableTarget(
@@ -44,7 +44,7 @@ let package = Package(
                 "AppConfiguration",
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
                 .product(name: "MCP", package: "swift-sdk"),
-                .product(name: "CascadeKit", package: "cascade-kit"),
+                .product(name: "CascadeKit", package: "cascade-kit")
             ]
         ),
         .testTarget(
@@ -52,14 +52,14 @@ let package = Package(
             dependencies: [
                 "App",
                 "AppConfiguration",
-                .product(name: "CascadeKit", package: "cascade-kit"),
+                .product(name: "CascadeKit", package: "cascade-kit")
             ]
         ),
         .testTarget(
             name: "AppConfigurationTests",
             dependencies: [
                 "AppConfiguration",
-                .product(name: "Configuration", package: "swift-configuration"),
+                .product(name: "Configuration", package: "swift-configuration")
             ]
         ),
         .testTarget(
@@ -68,9 +68,9 @@ let package = Package(
                 "HimalayaMcpCLI",
                 "App",
                 "AppConfiguration",
-                .product(name: "CascadeKit", package: "cascade-kit"),
+                .product(name: "CascadeKit", package: "cascade-kit")
             ]
-        ),
+        )
     ],
     swiftLanguageModes: [.v6]
 )

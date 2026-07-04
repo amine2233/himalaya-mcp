@@ -94,7 +94,9 @@ extension ToolHandler {
                 "properties": .object([
                     "query": .object([
                         "type": .string("string"),
-                        "description": .string("himalaya filter/sort query, e.g. `subject invoice order by date desc`.")
+                        "description": .string(
+                            "himalaya filter/sort query, e.g. `subject invoice order by date desc`."
+                        )
                     ]),
                     "folder": folderProperty,
                     "account": accountProperty
@@ -321,7 +323,9 @@ extension ToolHandler {
                 "properties": .object([
                     "template": .object([
                         "type": .string("string"),
-                        "description": .string("Raw message/template to send (from compose_email or draft_reply).")
+                        "description": .string(
+                            "Raw message/template to send (from compose_email or draft_reply)."
+                        )
                     ]),
                     "attachments": attachmentsProperty,
                     "confirm": .object([
