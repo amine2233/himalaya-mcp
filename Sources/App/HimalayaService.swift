@@ -16,9 +16,18 @@ public protocol HimalayaService: Sendable {
     /// Runs `himalaya` with `arguments` and returns its combined, trimmed
     /// standard output and standard error.
     ///
+    /// - Parameter standardInput: text piped to himalaya's stdin (required by
+    ///   `template send`, which reads the template there). `nil` sends nothing.
     /// - Throws: `AppError.himalayaExecutableNotFound` if the binary can't be
     ///   located, or any error thrown while running the subprocess.
-    func run(arguments: [String]) throws -> String
+    func run(arguments: [String], standardInput: String?) throws -> String
+}
+
+extension HimalayaService {
+    /// Convenience for running with no standard input.
+    public func run(arguments: [String]) throws -> String {
+        try run(arguments: arguments, standardInput: nil)
+    }
 }
 
 /// Service key used to register/resolve the `HimalayaService` in a container.

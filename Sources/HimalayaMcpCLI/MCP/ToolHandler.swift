@@ -34,7 +34,7 @@ extension ToolHandler {
         .listEmails, .searchEmails, .readEmail, .readEmailHtml,
         .listFolders, .createFolder, .deleteFolder,
         .flagEmail, .moveEmail,
-        .composeEmail, .draftReply, .sendEmail,
+        .composeEmail, .draftReply, .sendEmail, .sendTemplate,
         .listAttachments, .downloadAttachment,
         .deleteEmail
     ]
@@ -340,6 +340,40 @@ extension ToolHandler {
         call: { params, application in
             let input = try decodeArguments(SendEmailRequest.Input.self, from: params.arguments)
             return try await SendEmailRequest().execute(input, in: application)
+        }
+    )
+
+    static let sendTemplate = ToolHandler(
+        tool: Tool(
+            name: "send_template",
+            description: "Send a himalaya template (headers + MML body) you author, inline or from a file. Requires confirm=true; irreversible.",
+            inputSchema: .object([
+                "type": .string("object"),
+                "properties": .object([
+                    "template": .object([
+                        "type": .string("string"),
+                        "description": .string(
+                            "The template text (headers + MML body). Use this or template_file."
+                        )
+                    ]),
+                    "template_file": .object([
+                        "type": .string("string"),
+                        "description": .string(
+                            "Path to a file containing the template. Use this or template."
+                        )
+                    ]),
+                    "attachments": attachmentsProperty,
+                    "confirm": .object([
+                        "type": .string("boolean"),
+                        "description": .string("Must be true to actually send.")
+                    ]),
+                    "account": accountProperty
+                ])
+            ])
+        ),
+        call: { params, application in
+            let input = try decodeArguments(SendTemplateRequest.Input.self, from: params.arguments)
+            return try await SendTemplateRequest().execute(input, in: application)
         }
     )
 

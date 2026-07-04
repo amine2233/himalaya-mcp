@@ -1,9 +1,10 @@
 import CascadeKit
 
-/// Composes a new message template via `himalaya message write`.
+/// Composes a new message template via `himalaya template write`.
 ///
-/// This does **not** send: it returns a ready-to-send template (headers + body,
-/// with attachments expressed as MML). Pass the result to `send_email`.
+/// Uses the `template` family (not `message write`, which launches an editor):
+/// it returns a ready-to-send template (headers + body, with attachments
+/// expressed as MML) to stdout, and does **not** send. Pass the result to `send_email`.
 public struct ComposeEmailRequest: Request {
     public struct Input: Sendable, Decodable {
         /// Recipient address.
@@ -37,7 +38,7 @@ public struct ComposeEmailRequest: Request {
     public func execute(_ input: Input, in application: Application) async throws -> String {
         let body = MMLAttachment.appended(to: input.body, paths: input.attachments ?? [])
         var arguments = [
-            "message", "write",
+            "template", "write",
             "--header", "To:\(input.to)",
             "--header", "Subject:\(input.subject)"
         ]

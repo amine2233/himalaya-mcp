@@ -71,9 +71,13 @@ public struct HimalayaServiceDefault: HimalayaService {
         throw AppError.himalayaExecutableNotFound(searchedPaths: searched)
     }
 
-    public func run(arguments: [String]) throws -> String {
+    public func run(arguments: [String], standardInput: String? = nil) throws -> String {
         let effective = Self.applyingDefaults(to: arguments, account: defaultAccount, folder: defaultFolder)
-        return try executable.run(executable: resolveExecutablePath(), arguments: effective)
+        return try executable.run(
+            executable: resolveExecutablePath(),
+            arguments: effective,
+            standardInput: standardInput
+        )
     }
 
     /// Weaves the configured default account/folder into `arguments`, leaving an
@@ -98,12 +102,13 @@ public struct HimalayaServiceDefault: HimalayaService {
     }
 
     /// Whether the himalaya command in `arguments` accepts a `--folder` option.
-    /// The `account`/`folder` families and `message write`/`message send` do not.
+    /// The `account`/`folder` families and the `write`/`send` subcommands of
+    /// `message`/`template` do not.
     static func commandAcceptsFolder(_ arguments: [String]) -> Bool {
         switch arguments.first {
         case "folder", "account":
             return false
-        case "message":
+        case "message", "template":
             let subcommand = arguments.dropFirst().first
             return subcommand != "write" && subcommand != "send"
         default:

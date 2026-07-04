@@ -43,7 +43,7 @@ public struct DraftReplyRequest: Request {
     public init() {}
 
     public func execute(_ input: Input, in application: Application) async throws -> String {
-        var arguments = ["message", "reply", input.id]
+        var arguments = ["template", "reply", input.id]
         if input.replyAll == true { arguments.append("--all") }
         if let folder = input.folder { arguments += ["--folder", folder] }
         if let account = input.account { arguments += ["--account", account] }

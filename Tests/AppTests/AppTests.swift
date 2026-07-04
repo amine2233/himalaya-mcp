@@ -8,7 +8,7 @@ import Testing
 /// A stub executable service so requests can be tested without shelling out to `himalaya`.
 private struct StubExecutable: ExecutableService {
     let output: String
-    func run(executable: String, arguments: [String]) throws -> String {
+    func run(executable: String, arguments: [String], standardInput: String?) throws -> String {
         output
     }
 }
@@ -21,15 +21,16 @@ private final class RecordingExecutable: ExecutableService {
         self.output = output
     }
 
-    func run(executable: String, arguments: [String]) throws -> String {
+    func run(executable: String, arguments: [String], standardInput: String?) throws -> String {
         calls.withLock { $0.append((executable, arguments)) }
         return output
     }
 }
 
-/// A himalaya stub that records the arguments of the last `run` call.
+/// A himalaya stub that records the arguments and stdin of each `run` call.
 private final class RecordingHimalaya: HimalayaService {
     let calls = Mutex<[[String]]>([])
+    let stdins = Mutex<[String?]>([])
     let output: String
     init(output: String = "") {
         self.output = output
@@ -39,8 +40,9 @@ private final class RecordingHimalaya: HimalayaService {
         "/usr/local/bin/himalaya"
     }
 
-    func run(arguments: [String]) throws -> String {
+    func run(arguments: [String], standardInput: String?) throws -> String {
         calls.withLock { $0.append(arguments) }
+        stdins.withLock { $0.append(standardInput) }
         return output
     }
 }
@@ -65,7 +67,7 @@ private struct ScriptedHimalaya: HimalayaService {
         return "/usr/local/bin/himalaya"
     }
 
-    func run(arguments: [String]) throws -> String {
+    func run(arguments: [String], standardInput: String?) throws -> String {
         handler(arguments)
     }
 }
@@ -239,7 +241,7 @@ func composeEmailBuildsHeadersAndBody() async throws {
 
     #expect(output == "template")
     #expect(himalaya.calls.withLock { $0 } == [[
-        "message", "write", "--header", "To:a@b.c", "--header", "Subject:Hi", "Hello"
+        "template", "write", "--header", "To:a@b.c", "--header", "Subject:Hi", "Hello"
     ]])
 }
 
@@ -266,7 +268,7 @@ func draftReplyUsesAllFlag() async throws {
     _ = try await DraftReplyRequest().execute(input, in: app)
 
     #expect(himalaya.calls.withLock { $0 } == [[
-        "message", "reply", "5", "--all", "--folder", "INBOX", "Thanks"
+        "template", "reply", "5", "--all", "--folder", "INBOX", "Thanks"
     ]])
 }
 
@@ -275,7 +277,7 @@ func draftReplyOmitsAllFlagWhenNotRequested() async throws {
     let (app, himalaya) = appWithRecordingHimalaya()
     _ = try await DraftReplyRequest().execute(DraftReplyRequest.Input(id: "5"), in: app)
 
-    #expect(himalaya.calls.withLock { $0 } == [["message", "reply", "5"]])
+    #expect(himalaya.calls.withLock { $0 } == [["template", "reply", "5"]])
 }
 
 @Test
@@ -295,9 +297,68 @@ func sendEmailSendsWhenConfirmed() async throws {
     let output = try await SendEmailRequest().execute(input, in: app)
 
     #expect(output == "Message sent.")
-    #expect(himalaya.calls.withLock { $0 } == [[
-        "message", "send", "--account", "work", "raw message"
-    ]])
+    #expect(himalaya.calls.withLock { $0 } == [["template", "send", "--account", "work"]])
+    #expect(himalaya.stdins.withLock { $0 } == ["raw message"])
+}
+
+@Test
+func sendTemplateSendsInlineTemplateWhenConfirmed() async throws {
+    let (app, himalaya) = appWithRecordingHimalaya()
+    let input = SendTemplateRequest.Input(template: "From: a@b.c\n\nHi", confirm: true)
+    let output = try await SendTemplateRequest().execute(input, in: app)
+
+    #expect(output == "Template sent.")
+    #expect(himalaya.calls.withLock { $0 } == [["template", "send"]])
+    #expect(himalaya.stdins.withLock { $0 } == ["From: a@b.c\n\nHi"])
+}
+
+@Test
+func sendTemplateRefusesWithoutConfirmation() async throws {
+    let (app, himalaya) = appWithRecordingHimalaya()
+    let output = try await SendTemplateRequest().execute(
+        SendTemplateRequest.Input(template: "x", confirm: false), in: app
+    )
+    #expect(output == "Refusing to send: set confirm=true to actually send the template.")
+    #expect(himalaya.calls.withLock { $0 }.isEmpty)
+}
+
+@Test
+func sendTemplateReadsFromFile() async throws {
+    let fileManager = FileManager.default
+    let dir = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try fileManager.createDirectory(at: dir, withIntermediateDirectories: true)
+    defer { try? fileManager.removeItem(at: dir) }
+    let file = dir.appendingPathComponent("draft.eml")
+    try Data("From: a@b.c\n\nFrom a file".utf8).write(to: file)
+
+    let (app, himalaya) = appWithRecordingHimalaya()
+    _ = try await SendTemplateRequest().execute(
+        SendTemplateRequest.Input(templateFile: file.path, confirm: true), in: app
+    )
+    #expect(himalaya.calls.withLock { $0 } == [["template", "send"]])
+    #expect(himalaya.stdins.withLock { $0 } == ["From: a@b.c\n\nFrom a file"])
+}
+
+@Test
+func sendTemplateRejectsAmbiguousOrMissingSource() async throws {
+    let (app, _) = appWithRecordingHimalaya()
+    await #expect(throws: AppError.invalidArgument("Provide a \"template\" or \"template_file\" to send.")) {
+        try await SendTemplateRequest().execute(SendTemplateRequest.Input(confirm: true), in: app)
+    }
+    await #expect(throws: AppError
+        .invalidArgument("Provide only one of \"template\" or \"template_file\".")) {
+        try await SendTemplateRequest().execute(
+            SendTemplateRequest.Input(template: "x", templateFile: "/y", confirm: true), in: app
+        )
+    }
+}
+
+@Test
+func defaultFolderNotInjectedForTemplateSend() {
+    // `template write`/`template send` don't accept --folder; `template reply` does.
+    #expect(HimalayaServiceDefault.commandAcceptsFolder(["template", "send"]) == false)
+    #expect(HimalayaServiceDefault.commandAcceptsFolder(["template", "write"]) == false)
+    #expect(HimalayaServiceDefault.commandAcceptsFolder(["template", "reply", "1"]) == true)
 }
 
 @Test

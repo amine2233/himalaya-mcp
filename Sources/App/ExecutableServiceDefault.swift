@@ -13,7 +13,7 @@ public struct ExecutableServiceDefault: ExecutableService {
         self.timeoutMilliseconds = timeoutMilliseconds
     }
 
-    public func run(executable: String, arguments: [String]) throws -> String {
+    public func run(executable: String, arguments: [String], standardInput: String? = nil) throws -> String {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         process.arguments = [executable] + arguments
@@ -22,11 +22,21 @@ public struct ExecutableServiceDefault: ExecutableService {
         process.standardOutput = pipe
         process.standardError = pipe
 
+        // Always give the child its own stdin pipe so it never reads the parent's
+        // stdin (in `serve` mode that's the JSON-RPC stream). We feed the given
+        // input, if any, then close to signal EOF.
+        let inputPipe = Pipe()
+        process.standardInput = inputPipe
+
         // Signalled when the process exits (naturally or after termination).
         let exited = DispatchSemaphore(value: 0)
         process.terminationHandler = { _ in exited.signal() }
 
         try process.run()
+
+        let inputHandle = inputPipe.fileHandleForWriting
+        if let standardInput { inputHandle.write(Data(standardInput.utf8)) }
+        try? inputHandle.close()
 
         var timedOut = false
         if timeoutMilliseconds > 0 {
