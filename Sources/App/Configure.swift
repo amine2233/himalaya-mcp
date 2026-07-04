@@ -8,6 +8,9 @@ import CascadeKit
 /// replaces the default (no stale singleton cache).
 public func configure(_ app: Application) async {
     app.register(ExecutableServiceKey.self) { _ in ExecutableServiceDefault() }
+    app.register(HimalayaServiceKey.self) { container in
+        HimalayaServiceDefault(executable: container.make(ExecutableServiceKey.self))
+    }
 
     let flags = await ConfigurationLoader.resolve()
     app.register(FeatureFlagsServiceKey.self, scope: .transient) { _ in flags }
