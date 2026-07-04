@@ -1,0 +1,73 @@
+# mise tasks for building and installing himalaya-mcp.
+#   mise run build        # release build
+#   mise run install      # build + install to ~/.local/bin (per-user, no sudo)
+#   mise run setup-path   # optionally add ~/.local/bin to your shell PATH
+#   mise run mcp-add      # register the installed binary with Claude Code
+#   mise tasks            # list everything
+
+[env]
+# Per-user install prefix — the best-practice location for user binaries
+# (no sudo, doesn't touch the rest of the machine). Override with INSTALL_DIR=...
+INSTALL_DIR = "{{ env.HOME }}/.local/bin"
+# Installed command name (the Swift product is HimalayaMcpCLI).
+BIN_NAME = "himalaya-mcp"
+# Make the install dir visible on PATH inside this project's mise environment,
+# so the freshly-installed binary resolves without touching your shell profile.
+_.path = ["{{ env.HOME }}/.local/bin"]
+
+[tasks.build]
+description = "Build the release binary"
+run = "swift build -c release"
+
+[tasks.test]
+description = "Run the test suite"
+run = "swift test"
+
+[tasks.run]
+description = "Run the CLI (pass args after --)"
+run = "swift run HimalayaMcpCLI"
+
+[tasks.install]
+description = "Build and install himalaya-mcp to $INSTALL_DIR (~/.local/bin)"
+depends = ["build"]
+run = '''
+set -e
+mkdir -p "$INSTALL_DIR"
+BIN="$(swift build -c release --show-bin-path)/HimalayaMcpCLI"
+install -m 0755 "$BIN" "$INSTALL_DIR/$BIN_NAME"
+echo "Installed $BIN_NAME -> $INSTALL_DIR/$BIN_NAME"
+if ! command -v "$BIN_NAME" >/dev/null 2>&1; then
+  echo "note: $INSTALL_DIR is not on your PATH yet — run: mise run setup-path"
+fi
+'''
+
+[tasks.uninstall]
+description = "Remove himalaya-mcp from $INSTALL_DIR"
+run = '''
+rm -f "$INSTALL_DIR/$BIN_NAME"
+echo "Removed $INSTALL_DIR/$BIN_NAME"
+'''
+
+[tasks.setup-path]
+description = "Optionally add ~/.local/bin to PATH in your shell profile (idempotent)"
+run = '''
+set -e
+case "$(basename "${SHELL:-/bin/zsh}")" in
+  zsh)  PROFILE="$HOME/.zshrc" ;;
+  bash) PROFILE="$HOME/.bashrc" ;;
+  *)    PROFILE="$HOME/.profile" ;;
+esac
+LINE='export PATH="$HOME/.local/bin:$PATH"'
+if [ -f "$PROFILE" ] && grep -qF "$LINE" "$PROFILE"; then
+  echo "$PROFILE already puts ~/.local/bin on PATH"
+else
+  printf '\n# Added by himalaya-mcp (mise run setup-path)\n%s\n' "$LINE" >> "$PROFILE"
+  echo "Added ~/.local/bin to PATH in $PROFILE"
+  echo "Restart your shell or run: source $PROFILE"
+fi
+'''
+
+[tasks.mcp-add]
+description = "Register the installed binary with Claude Code (user scope)"
+depends = ["install"]
+run = 'claude mcp add himalaya-mcp -- "$INSTALL_DIR/$BIN_NAME" serve'

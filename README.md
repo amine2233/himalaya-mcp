@@ -150,33 +150,59 @@ sequenceDiagram
 
 - Swift 6.0+ toolchain
 - macOS 15+ (required by `swift-configuration` 1.0)
+- The [`himalaya`](https://github.com/pimalaya/himalaya) CLI, installed and configured with at least
+  one account — the server shells out to it (found via `PATH` or `$HIMALAYA_BIN_PATH`)
+- Optional: [`mise`](https://mise.jdx.dev) to run the build/install tasks below
 
-## Build
+## Install
+
+**Recommended — per-user install to `~/.local/bin` (via mise).** This keeps the binary in your home
+directory (no `sudo`, nothing installed machine-wide):
 
 ```bash
-swift build              # debug
-swift build -c release   # release (recommended for installing as an MCP server)
+mise run install       # build -c release, then install to ~/.local/bin/himalaya-mcp
+mise run setup-path    # optional: add ~/.local/bin to PATH in your shell profile
+```
 
-# Absolute path to the binary (used by MCP host configs):
-echo "$(swift build -c release --show-bin-path)/HimalayaMcpCLI"
+`mise run install` copies the release binary to `~/.local/bin/himalaya-mcp` (override the location
+with `INSTALL_DIR=/some/dir mise run install`). `~/.local/bin` is already on `PATH` inside this
+project's mise environment; `setup-path` makes that permanent for your interactive shells.
+Run `mise tasks` to see everything (`build`, `test`, `run`, `install`, `uninstall`, `setup-path`,
+`mcp-add`).
+
+**Manual — without mise:**
+
+```bash
+swift build -c release
+mkdir -p "$HOME/.local/bin"
+install -m 0755 "$(swift build -c release --show-bin-path)/HimalayaMcpCLI" "$HOME/.local/bin/himalaya-mcp"
+```
+
+**Development build** (run in place, no install):
+
+```bash
+swift build            # debug
+swift run HimalayaMcpCLI --help
 ```
 
 ## Usage as a CLI
 
 ```bash
-swift run HimalayaMcpCLI --help           # discover commands
+himalaya-mcp --help           # if installed on PATH (mise run install)
+swift run HimalayaMcpCLI --help   # or run in place from the source tree
 ```
 
 ## Usage as an MCP server
 
 ```bash
-swift run HimalayaMcpCLI serve
+himalaya-mcp serve            # installed binary
+swift run HimalayaMcpCLI serve    # or from the source tree
 ```
 
 `serve` speaks JSON-RPC over **stdio**; an MCP host launches it for you. Manual smoke test:
 
 ```bash
-BIN="$(swift build --show-bin-path)/HimalayaMcpCLI"
+BIN="$HOME/.local/bin/himalaya-mcp"   # or "$(swift build --show-bin-path)/HimalayaMcpCLI"
 {
   printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"smoke","version":"0.0.1"}}}'
   printf '%s\n' '{"jsonrpc":"2.0","method":"notifications/initialized"}'
@@ -190,17 +216,20 @@ BIN="$(swift build --show-bin-path)/HimalayaMcpCLI"
 
 ### Claude Code integration
 
+After `mise run install`, register the installed binary (user scope) — or just run `mise run mcp-add`,
+which does the same:
+
 ```bash
-claude mcp add himalaya-mcp -- "$(swift build -c release --show-bin-path)/HimalayaMcpCLI" serve
+claude mcp add himalaya-mcp -- "$HOME/.local/bin/himalaya-mcp" serve
 ```
 
-Or commit a project-scoped `.mcp.json`:
+Or use a `.mcp.json` (this repo's is git-ignored, since it holds a machine-specific absolute path):
 
 ```json
 {
   "mcpServers": {
     "himalaya-mcp": {
-      "command": "/absolute/path/to/.build/release/HimalayaMcpCLI",
+      "command": "/Users/you/.local/bin/himalaya-mcp",
       "args": ["serve"],
       "env": { "EXPERIMENTAL_ENABLED": "true" }
     }
@@ -246,7 +275,7 @@ hidden (absent from `--help` / `tools/list`, unknown if invoked). Mark a `ToolHa
 `isExperimental: true` (or gate a subcommand behind the flag) to place it behind this switch.
 
 ```bash
-EXPERIMENTAL_ENABLED=true /absolute/path/to/.build/release/HimalayaMcpCLI serve
+EXPERIMENTAL_ENABLED=true "$HOME/.local/bin/himalaya-mcp" serve
 ```
 
 ---
@@ -270,7 +299,7 @@ Both surfaces share the new feature with zero duplicated logic.
 ## Tests
 
 ```bash
-swift test
+swift test        # or: mise run test
 ```
 
 Tests are split per module (`AppTests`, `AppConfigurationTests`, `HimalayaMcpCLITests`). Requests are
