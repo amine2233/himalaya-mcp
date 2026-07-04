@@ -20,7 +20,8 @@ struct HimalayaMcpCLI: AsyncParsableCommand {
             version: "0.1.0",
             subcommands: [
                 ServeCommand.self,
-                SetupCommand.self
+                SetupCommand.self,
+                DoctorCommand.self
             ],
             defaultSubcommand: ServeCommand.self
         )

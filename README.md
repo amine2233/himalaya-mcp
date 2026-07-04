@@ -207,6 +207,21 @@ himalaya-mcp --help           # if installed on PATH (mise run install)
 swift run HimalayaMcpCLI --help   # or run in place from the source tree
 ```
 
+Besides `serve`, the CLI ships management commands:
+
+```bash
+himalaya-mcp doctor                  # check himalaya + all accounts are reachable
+himalaya-mcp doctor --account work   # check only one account
+himalaya-mcp doctor --json           # machine-readable report (exit code non-zero on problems)
+
+himalaya-mcp setup                   # add/update the entry in Claude Desktop's config
+himalaya-mcp setup --check           # verify that entry
+himalaya-mcp setup --remove          # remove it
+```
+
+`doctor` resolves the `himalaya` binary, discovers accounts via `himalaya account list`, and probes
+each by listing its folders — reporting reachability per account (add `--json` for scripting/CI).
+
 ## Usage as an MCP server
 
 ```bash

@@ -80,7 +80,7 @@ public struct HimalayaServiceDefault: HimalayaService {
     /// explicitly-provided `--account`/`--folder` untouched.
     static func applyingDefaults(to arguments: [String], account: String?, folder: String?) -> [String] {
         var arguments = arguments
-        if let account, !arguments.contains("--account") {
+        if let account, commandAcceptsAccount(arguments), !arguments.contains("--account") {
             arguments += ["--account", account]
         }
         if let folder, commandAcceptsFolder(arguments), !arguments.contains("--folder") {
@@ -89,11 +89,19 @@ public struct HimalayaServiceDefault: HimalayaService {
         return arguments
     }
 
+    /// Whether the himalaya command in `arguments` accepts an `--account` option.
+    /// The `account` family takes a positional account name, not `--account`.
+    static func commandAcceptsAccount(_ arguments: [String]) -> Bool {
+        guard let command = arguments.first else { return false }
+
+        return command != "account"
+    }
+
     /// Whether the himalaya command in `arguments` accepts a `--folder` option.
-    /// The `folder` subcommands and `message write`/`message send` do not.
+    /// The `account`/`folder` families and `message write`/`message send` do not.
     static func commandAcceptsFolder(_ arguments: [String]) -> Bool {
         switch arguments.first {
-        case "folder":
+        case "folder", "account":
             return false
         case "message":
             let subcommand = arguments.dropFirst().first

@@ -53,6 +53,29 @@ private func appWithRecordingHimalaya(output: String = "") -> (Application, Reco
     return (app, himalaya)
 }
 
+/// A himalaya stub whose output depends on the arguments (for multi-call flows).
+/// `resolvable` controls whether `resolveExecutablePath()` succeeds.
+private struct ScriptedHimalaya: HimalayaService {
+    var resolvable = true
+    let handler: @Sendable ([String]) -> String
+
+    func resolveExecutablePath() throws -> String {
+        guard resolvable else { throw AppError.himalayaExecutableNotFound(searchedPaths: []) }
+
+        return "/usr/local/bin/himalaya"
+    }
+
+    func run(arguments: [String]) throws -> String {
+        handler(arguments)
+    }
+}
+
+private func appWithScriptedHimalaya(_ himalaya: ScriptedHimalaya) -> Application {
+    let app = Application()
+    app.register(HimalayaServiceKey.self) { _ in himalaya }
+    return app
+}
+
 @Test
 func listEmailsBuildsArgumentsWithAllOptions() async throws {
     let (app, himalaya) = appWithRecordingHimalaya(output: "envelopes")
@@ -320,6 +343,85 @@ func defaultFolderInjectedForFolderAcceptingCommand() {
         to: ["message", "read", "5"], account: nil, folder: "Archive"
     )
     #expect(args == ["message", "read", "5", "--folder", "Archive"])
+}
+
+@Test
+func defaultsNotInjectedForAccountCommands() {
+    // `account list` accepts neither --account nor --folder.
+    let args = HimalayaServiceDefault.applyingDefaults(
+        to: ["account", "list", "-o", "json"], account: "work", folder: "Archive"
+    )
+    #expect(args == ["account", "list", "-o", "json"])
+    #expect(HimalayaServiceDefault.commandAcceptsAccount(["account", "list"]) == false)
+    #expect(HimalayaServiceDefault.commandAcceptsAccount(["folder", "list"]) == true)
+}
+
+@Test
+func doctorReportsReachableAccounts() async throws {
+    let app = appWithScriptedHimalaya(ScriptedHimalaya { args in
+        if args.first == "account" {
+            return "[{\"name\":\"work\",\"backend\":\"IMAP, SMTP\",\"default\":true}]"
+        }
+        return "| NAME | DESC |\n| INBOX | ... |" // folder list success
+    })
+
+    let report = try await DoctorRequest().execute(.init(), in: app)
+
+    #expect(report.ok)
+    #expect(report.himalayaPath == "/usr/local/bin/himalaya")
+    #expect(report.accounts.count == 1)
+    #expect(report.accounts.first?.name == "work")
+    #expect(report.accounts.first?.isDefault == true)
+    #expect(report.accounts.first?.ok == true)
+    #expect(report.accounts.first?.detail == "reachable")
+}
+
+@Test
+func doctorReportsUnreachableAccount() async throws {
+    let app = appWithScriptedHimalaya(ScriptedHimalaya { args in
+        if args.first == "account" {
+            return "[{\"name\":\"work\",\"backend\":\"IMAP\",\"default\":true}]"
+        }
+        return "Error: cannot connect to IMAP server" // folder list failure
+    })
+
+    let report = try await DoctorRequest().execute(.init(), in: app)
+
+    #expect(report.ok == false)
+    #expect(report.accounts.first?.ok == false)
+    #expect(report.accounts.first?.detail == "Error: cannot connect to IMAP server")
+}
+
+@Test
+func doctorChecksSingleAccount() async throws {
+    let probed = Mutex<[[String]]>([])
+    let app = appWithScriptedHimalaya(ScriptedHimalaya { args in
+        probed.withLock { $0.append(args) }
+        if args
+            .first ==
+            "account" {
+            return "[{\"name\":\"work\",\"default\":true},{\"name\":\"perso\",\"default\":false}]"
+        }
+        return "| NAME |"
+    })
+
+    let report = try await DoctorRequest().execute(.init(account: "perso"), in: app)
+
+    #expect(report.accounts.count == 1)
+    #expect(report.accounts.first?.name == "perso")
+    // The folder-list probe targeted exactly the requested account.
+    #expect(probed.withLock { $0 }.contains(["folder", "list", "--account", "perso"]))
+}
+
+@Test
+func doctorReportsMissingHimalaya() async throws {
+    let app = appWithScriptedHimalaya(ScriptedHimalaya(resolvable: false) { _ in "" })
+
+    let report = try await DoctorRequest().execute(.init(), in: app)
+
+    #expect(report.himalayaPath == nil)
+    #expect(report.ok == false)
+    #expect(report.accounts.isEmpty)
 }
 
 @Test
