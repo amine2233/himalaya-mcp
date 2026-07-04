@@ -12,14 +12,27 @@ public enum ConfigurationLoader {
     /// Default config file name, looked up in the current working directory.
     private static let defaultConfigFileName = "himalaya-mcp.json"
 
-    /// Resolves configuration from the environment layered over an optional JSON
-    /// config file (env wins). The file provider is asynchronous, hence `async`.
+    /// Resolves the feature flags from the environment layered over an optional
+    /// JSON config file (env wins). The file provider is asynchronous, hence `async`.
     public static func resolve() async -> FeatureFlags {
+        FeatureFlags(config: await configReader())
+    }
+
+    /// Resolves both the feature flags and the himalaya settings from a single
+    /// configuration reader (avoids reading the config file twice).
+    public static func resolveAll() async -> (flags: FeatureFlags, settings: HimalayaSettings) {
+        let reader = await configReader()
+        return (FeatureFlags(config: reader), HimalayaSettings(config: reader))
+    }
+
+    /// Builds a `ConfigReader` from the environment (highest precedence) layered
+    /// over an optional JSON config file.
+    private static func configReader() async -> ConfigReader {
         var providers: [any ConfigProvider] = [EnvironmentVariablesProvider()]
         if let fileProvider = await jsonFileProvider() {
             providers.append(fileProvider)
         }
-        return FeatureFlags(config: ConfigReader(providers: providers))
+        return ConfigReader(providers: providers)
     }
 
     /// A JSON file provider for `$HIMALAYA_MCP_CONFIG` (or `himalaya-mcp.json` in the

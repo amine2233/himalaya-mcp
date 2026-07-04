@@ -10,6 +10,9 @@ public enum AppError: Error, Equatable, Sendable {
     /// A request was given an argument it can't act on (e.g. an unknown flag
     /// action). `reason` explains what was wrong.
     case invalidArgument(String)
+    /// A himalaya command ran longer than the configured timeout and was
+    /// terminated. `milliseconds` is the limit that was exceeded.
+    case commandTimedOut(milliseconds: Int)
 }
 
 extension AppError: CustomStringConvertible {
@@ -25,6 +28,8 @@ extension AppError: CustomStringConvertible {
             """
         case .invalidArgument(let reason):
             return reason
+        case .commandTimedOut(let milliseconds):
+            return "himalaya command timed out after \(milliseconds) ms."
         }
     }
 }

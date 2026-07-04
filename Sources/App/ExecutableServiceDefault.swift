@@ -1,8 +1,17 @@
 import Foundation
 
 /// Live `ExecutableService`: runs a real subprocess via Foundation `Process`.
+///
+/// Enforces a wall-clock timeout: if the process runs longer than
+/// `timeoutMilliseconds`, it is terminated and `AppError.commandTimedOut` is
+/// thrown. A timeout of `0` disables the limit.
 public struct ExecutableServiceDefault: ExecutableService {
-    public init() {}
+    /// Command timeout in milliseconds. `0` means no timeout.
+    public let timeoutMilliseconds: Int
+
+    public init(timeoutMilliseconds: Int = 120_000) {
+        self.timeoutMilliseconds = timeoutMilliseconds
+    }
 
     public func run(executable: String, arguments: [String]) throws -> String {
         let process = Process()
@@ -13,10 +22,29 @@ public struct ExecutableServiceDefault: ExecutableService {
         process.standardOutput = pipe
         process.standardError = pipe
 
-        try process.run()
-        process.waitUntilExit()
+        // Signalled when the process exits (naturally or after termination).
+        let exited = DispatchSemaphore(value: 0)
+        process.terminationHandler = { _ in exited.signal() }
 
+        try process.run()
+
+        var timedOut = false
+        if timeoutMilliseconds > 0 {
+            if exited.wait(timeout: .now() + .milliseconds(timeoutMilliseconds)) == .timedOut {
+                timedOut = true
+                process.terminate()
+                exited.wait() // wait for the terminated process to actually finish
+            }
+        } else {
+            exited.wait()
+        }
+
+        // The process has ended, so its write end is closed: this reads to EOF.
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        if timedOut {
+            throw AppError.commandTimedOut(milliseconds: timeoutMilliseconds)
+        }
+
         let output = String(decoding: data, as: UTF8.self)
         return output.trimmingCharacters(in: .whitespacesAndNewlines)
     }

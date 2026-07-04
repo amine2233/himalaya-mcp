@@ -11,6 +11,10 @@ import Foundation
 ///
 /// Once resolved, the command is delegated to the injected `ExecutableService`,
 /// so the process-running machinery stays in one place and is stubbable in tests.
+///
+/// Before delegating, configured defaults are woven into the arguments: a default
+/// `--account` (for any command, when none was given) and a default `--folder`
+/// (for commands that accept one, when none was given).
 public struct HimalayaServiceDefault: HimalayaService {
     /// Name of the executable searched for on `PATH`.
     public static let executableName = "himalaya"
@@ -21,17 +25,26 @@ public struct HimalayaServiceDefault: HimalayaService {
 
     private let executable: any ExecutableService
     private let environment: [String: String]
+    private let defaultAccount: String?
+    private let defaultFolder: String?
 
     /// - Parameters:
     ///   - executable: Runner used to spawn the resolved binary.
     ///   - environment: Environment to read the override and `PATH` from. Defaults
     ///     to the current process environment.
+    ///   - defaultAccount: Account injected as `--account` when a call omits one.
+    ///   - defaultFolder: Folder injected as `--folder` when a folder-accepting
+    ///     call omits one.
     public init(
         executable: any ExecutableService,
-        environment: [String: String] = ProcessInfo.processInfo.environment
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        defaultAccount: String? = nil,
+        defaultFolder: String? = nil
     ) {
         self.executable = executable
         self.environment = environment
+        self.defaultAccount = defaultAccount
+        self.defaultFolder = defaultFolder
     }
 
     public func resolveExecutablePath() throws -> String {
@@ -58,7 +71,35 @@ public struct HimalayaServiceDefault: HimalayaService {
     }
 
     public func run(arguments: [String]) throws -> String {
-        try executable.run(executable: try resolveExecutablePath(), arguments: arguments)
+        let effective = Self.applyingDefaults(to: arguments, account: defaultAccount, folder: defaultFolder)
+        return try executable.run(executable: try resolveExecutablePath(), arguments: effective)
+    }
+
+    /// Weaves the configured default account/folder into `arguments`, leaving an
+    /// explicitly-provided `--account`/`--folder` untouched.
+    static func applyingDefaults(to arguments: [String], account: String?, folder: String?) -> [String] {
+        var arguments = arguments
+        if let account, !arguments.contains("--account") {
+            arguments += ["--account", account]
+        }
+        if let folder, commandAcceptsFolder(arguments), !arguments.contains("--folder") {
+            arguments += ["--folder", folder]
+        }
+        return arguments
+    }
+
+    /// Whether the himalaya command in `arguments` accepts a `--folder` option.
+    /// The `folder` subcommands and `message write`/`message send` do not.
+    static func commandAcceptsFolder(_ arguments: [String]) -> Bool {
+        switch arguments.first {
+        case "folder":
+            return false
+        case "message":
+            let subcommand = arguments.dropFirst().first
+            return subcommand != "write" && subcommand != "send"
+        default:
+            return arguments.first != nil
+        }
     }
 
     /// Whether `path` points at a runnable file. Wraps `FileManager` so the

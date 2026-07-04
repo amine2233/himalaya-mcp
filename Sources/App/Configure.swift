@@ -7,11 +7,19 @@ import CascadeKit
 /// argument parsing. Feature flags are `.transient` so this resolved value always
 /// replaces the default (no stale singleton cache).
 public func configure(_ app: Application) async {
-    app.register(ExecutableServiceKey.self) { _ in ExecutableServiceDefault() }
+    let (flags, settings) = await ConfigurationLoader.resolveAll()
+
+    app.register(ExecutableServiceKey.self) { _ in
+        ExecutableServiceDefault(timeoutMilliseconds: settings.timeoutMilliseconds)
+    }
     app.register(HimalayaServiceKey.self) { container in
-        HimalayaServiceDefault(executable: container.make(ExecutableServiceKey.self))
+        HimalayaServiceDefault(
+            executable: container.make(ExecutableServiceKey.self),
+            defaultAccount: settings.account,
+            defaultFolder: settings.folder
+        )
     }
 
-    let flags = await ConfigurationLoader.resolve()
+    app.register(HimalayaSettingsServiceKey.self, scope: .transient) { _ in settings }
     app.register(FeatureFlagsServiceKey.self, scope: .transient) { _ in flags }
 }

@@ -70,7 +70,7 @@ graph TD
 
     HimalayaMcpCLI["HimalayaMcpCLI<br/>(executable)<br/>CLI + MCP surfaces, app instance"]
     App["App<br/>Request protocol, requests,<br/>ExecutableService, service keys, configure()"]
-    AppConfiguration["AppConfiguration<br/>FeatureFlags, ConfigurationLoader"]
+    AppConfiguration["AppConfiguration<br/>FeatureFlags, HimalayaSettings, ConfigurationLoader"]
 
     HimalayaMcpCLI --> App
     HimalayaMcpCLI --> AppConfiguration
@@ -84,8 +84,8 @@ graph TD
     AppConfiguration --> SC
 ```
 
-- **`AppConfiguration`** — dependency-light. Resolves `FeatureFlags` from the environment layered
-  over an optional JSON file (`ConfigurationLoader.resolve()`).
+- **`AppConfiguration`** — dependency-light. Resolves `FeatureFlags` and `HimalayaSettings` from the
+  environment layered over an optional JSON file (`ConfigurationLoader.resolveAll()`).
 - **`App`** — the domain. The `Request` protocol and its implementations, the `ExecutableService`
   abstraction (+ live `ExecutableServiceDefault`), the DI service keys, and the Vapor-style
   `configure(_:)` that registers everything into a container.
@@ -219,13 +219,25 @@ file**:
 | Key | Env var | JSON path | Default |
 |-----|---------|-----------|---------|
 | `experimental.enabled` | `EXPERIMENTAL_ENABLED` | `experimental.enabled` | `false` |
+| Default account | `HIMALAYA_ACCOUNT` | `himalaya.account` | system default |
+| Default folder | `HIMALAYA_FOLDER` | `himalaya.folder` | `INBOX` |
+| Command timeout (ms) | `HIMALAYA_TIMEOUT` | `himalaya.timeout` | `120000` (2 min; `0` = unlimited) |
+
+Also: `HIMALAYA_BIN_PATH` overrides binary discovery (see [What it does](#what-it-does)).
 
 The config file is `himalaya-mcp.json` in the working directory, or the path in `$HIMALAYA_MCP_CONFIG`. A
 missing file is fine; env always wins over the file.
 
 ```json
-{ "experimental": { "enabled": true } }
+{
+  "experimental": { "enabled": true },
+  "himalaya": { "account": "work", "folder": "INBOX", "timeout": 120000 }
+}
 ```
+
+`HIMALAYA_ACCOUNT` / `HIMALAYA_FOLDER` are woven into every command as `--account` / `--folder` when a
+tool call omits them (folder only for commands that accept one). `HIMALAYA_TIMEOUT` bounds each
+subprocess; exceeding it terminates the command and returns a timeout error.
 
 ### Experimental features
 

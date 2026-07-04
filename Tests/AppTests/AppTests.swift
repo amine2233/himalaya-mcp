@@ -248,6 +248,55 @@ private func appWithRecordingHimalaya(output: String = "") -> (Application, Reco
     #expect(himalaya.calls.withLock { $0 }.isEmpty)
 }
 
+@Test func defaultAccountInjectedWhenAbsent() {
+    let args = HimalayaServiceDefault.applyingDefaults(
+        to: ["envelope", "list"], account: "work", folder: nil
+    )
+    #expect(args == ["envelope", "list", "--account", "work"])
+}
+
+@Test func defaultAccountNotInjectedWhenExplicit() {
+    let args = HimalayaServiceDefault.applyingDefaults(
+        to: ["envelope", "list", "--account", "perso"], account: "work", folder: nil
+    )
+    #expect(args == ["envelope", "list", "--account", "perso"])
+}
+
+@Test func defaultFolderInjectedForFolderAcceptingCommand() {
+    let args = HimalayaServiceDefault.applyingDefaults(
+        to: ["message", "read", "5"], account: nil, folder: "Archive"
+    )
+    #expect(args == ["message", "read", "5", "--folder", "Archive"])
+}
+
+@Test func defaultFolderNotInjectedForFolderSubcommands() {
+    // `folder list`, `message write` and `message send` don't accept --folder.
+    #expect(HimalayaServiceDefault.commandAcceptsFolder(["folder", "list"]) == false)
+    #expect(HimalayaServiceDefault.commandAcceptsFolder(["message", "write"]) == false)
+    #expect(HimalayaServiceDefault.commandAcceptsFolder(["message", "send"]) == false)
+    #expect(HimalayaServiceDefault.commandAcceptsFolder(["message", "read", "1"]) == true)
+    #expect(HimalayaServiceDefault.commandAcceptsFolder(["envelope", "list"]) == true)
+
+    let args = HimalayaServiceDefault.applyingDefaults(
+        to: ["folder", "list"], account: nil, folder: "Archive"
+    )
+    #expect(args == ["folder", "list"])  // no --folder added
+}
+
+@Test func executableServiceTimesOutLongCommand() {
+    let service = ExecutableServiceDefault(timeoutMilliseconds: 100)
+
+    #expect(throws: AppError.commandTimedOut(milliseconds: 100)) {
+        try service.run(executable: "sleep", arguments: ["3"])
+    }
+}
+
+@Test func executableServiceRunsFastCommandWithinTimeout() throws {
+    let service = ExecutableServiceDefault(timeoutMilliseconds: 10_000)
+    let output = try service.run(executable: "echo", arguments: ["hello"])
+    #expect(output == "hello")
+}
+
 @Test func executableServiceResolvesFromContainer() throws {
     let app = Application()
     app.register(ExecutableServiceKey.self) { _ in StubExecutable(output: "himalaya 1.0.0") }
