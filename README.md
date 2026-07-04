@@ -53,6 +53,21 @@ searching `PATH`. Notes on the less obvious mappings:
 Experimental features are gated behind a configuration flag — hidden from `--help` / `tools/list`
 and rejected if invoked — unless `experimental.enabled` is on.
 
+### Folders & labels
+
+himalaya has no separate "label" concept — **labels are folders**. On Gmail-style accounts,
+each label is exposed as a folder, typically under a `Labels/` prefix (e.g. `Labels/Important`,
+`Labels/Newsletters`), alongside system folders like `INBOX`, `Archive`, `Sent`, `All Mail`,
+`Starred`, `Spam`, `Trash`. So every `folder` argument accepts a label path, and:
+
+- **List a label's mail** → `list_emails` with `folder: "Labels/Important"`.
+- **Apply a label** (move onto it) → `move_email` with `target_folder: "Labels/Follow Up"`.
+- **Create / delete a label** → `create_folder` / `delete_folder` with a `Labels/…` name.
+- **Archive** → `move_email` with `target_folder: "Archive"` (there is no dedicated archive command;
+  archiving is a move to the `Archive` folder).
+- **Flag / unflag** → `flag_email` with `action: "add" | "remove"` and flags like `Seen`, `Flagged`,
+  `Answered` (starring in Gmail terms is the `Flagged` flag, or a move to the `Starred` folder).
+
 ---
 
 ## Architecture
@@ -236,6 +251,110 @@ Or use a `.mcp.json` (this repo's is git-ignored, since it holds a machine-speci
   }
 }
 ```
+
+---
+
+## Example prompts
+
+Once the server is connected, drive it with natural language from your MCP host (Claude Code, an
+IDE, …). A good archive-and-flag prompt is explicit about **scope**, **action**, and **confirmation**,
+since some actions are irreversible:
+
+> **Archive & flag prompt**
+>
+> Go through my INBOX and help me triage:
+> 1. Find every unread email from GitHub notifications (`search_emails` with `from github`).
+> 2. Show me the list first — subject, sender, date — and **wait for my confirmation**.
+> 3. On my OK, mark them all read (`flag_email` `action: "add"`, `flags: "Seen"`) and archive them
+>    (`move_email` `target_folder: "Archive"`).
+> 4. For anything that looks important (security, receipts, a real person), **don't touch it** — list
+>    those separately so I can decide.
+
+More focused variants you can paste and tweak:
+
+- **Archive a sender:** "Archive all emails from `noreply@setapp.com` — show me the list before moving
+  them to `Archive`."
+- **Flag for follow-up:** "Flag emails 228 and 15 as `Flagged` and move them to `Labels/[01] Follow Up`."
+- **Star = flag:** "Star (flag as `Flagged`) every email from my manager this week."
+- **Mark read + archive a label:** "In `Labels/Newsletters`, mark everything as `Seen` and archive it."
+- **Clean up, safely:** "Find read newsletters older than 30 days, list them, and after I confirm,
+  archive them."
+
+> **Tip:** always ask the assistant to **list matches and wait for confirmation** before archiving,
+> flagging, or (especially) deleting — archive/flag are reversible, `delete_email` is not.
+
+### Prompt library
+
+Reusable, named prompts built on the tools above. Invoke one by name with its arguments (e.g.
+"run `triage_inbox` with count=20") and the assistant fills in the rest. All are **read-only**
+unless you explicitly approve an action.
+
+| Prompt | Arguments | Purpose |
+|--------|-----------|---------|
+| `triage_inbox` | `count=10` | Classify recent emails: actionable / FYI / skip |
+| `summarize_email` | `id`, `folder?` | One-sentence summary + action items for a message |
+| `daily_email_digest` | — | Priority-grouped markdown digest of the inbox |
+| `draft_reply` | `id`, `tone?`, `instructions?` | Guided reply composition (does not send) |
+| `morning_briefing` | `account?` | Morning briefing with urgency classification |
+| `inbox_check` | `folder?`, `account?` | Quick inbox status + highlights |
+
+<details>
+<summary><code>triage_inbox</code> — Classify emails: actionable / FYI / skip</summary>
+
+> List the latest `{count=10}` emails from my INBOX (`list_emails` with `page_size={count}`). For
+> each, classify it as **Actionable** (needs a reply or task), **FYI** (read-only, keep), or **Skip**
+> (newsletter/promo/noise). Return a table: id · from · subject · class · one-line reason. Don't move,
+> flag, or delete anything — just propose what I could archive/flag, and wait for my go-ahead.
+
+</details>
+
+<details>
+<summary><code>summarize_email</code> — One-sentence summary + action items</summary>
+
+> Read email `{id}` (in `{folder=INBOX}`) with `read_email`. Give me: (1) a **one-sentence summary**,
+> (2) a bullet list of **action items / requests** directed at me (empty if none), and (3) any
+> deadline or date mentioned. Keep it tight — no quoting the whole message.
+
+</details>
+
+<details>
+<summary><code>daily_email_digest</code> — Priority-grouped markdown digest</summary>
+
+> Build a markdown digest of my current INBOX (use `list_emails`, and `read_email` only where a
+> subject is ambiguous). Group by priority — **🔴 Needs action**, **🟡 Worth a look**, **⚪ FYI /
+> noise** — and within each group list `from — subject` (id). End with a 2–3 line "bottom line" of
+> what deserves my attention today. Read-only.
+
+</details>
+
+<details>
+<summary><code>draft_reply</code> — Guided reply composition</summary>
+
+> Draft a reply to email `{id}` (in `{folder=INBOX}`) using `draft_reply`. Tone: `{tone=friendly and
+> concise}`. Extra guidance: `{instructions}`. First show me the original's key points, then the
+> proposed reply as a template. **Do not send** — I'll review, and only send via `send_email` with
+> `confirm=true` once I approve.
+
+</details>
+
+<details>
+<summary><code>morning_briefing</code> — Morning briefing with urgency classification</summary>
+
+> Give me a morning briefing for account `{account=default}`. Pull today's and yesterday's unread mail
+> (`search_emails` with a recent-date query), then classify each as **Urgent** (time-sensitive / from a
+> person awaiting me), **Today** (handle before EOD), or **Later**. Lead with a one-paragraph summary,
+> then the grouped list. Flag anything that looks like a deadline, meeting, or security alert.
+
+</details>
+
+<details>
+<summary><code>inbox_check</code> — Quick inbox status + highlights</summary>
+
+> Quick status of `{folder=INBOX}` for account `{account=default}`: how many unread, and the top 5
+> most notable messages right now (sender · subject · why it stands out). One short paragraph, no
+> table. Read-only.
+
+</details>
 
 ---
 
