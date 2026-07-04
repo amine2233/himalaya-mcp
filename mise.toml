@@ -63,24 +63,37 @@ description = "Run the CLI (pass args after --)"
 run = "swift run HimalayaMcpCLI"
 
 [tasks.install]
-description = "Build and install himalaya-mcp to $INSTALL_DIR (~/.local/bin)"
+description = "Build (release) and install himalaya-mcp to a bin dir (default: ~/.local/bin)"
 depends = ["build"]
+usage = '''
+flag "--bin-path <dir>" help="Target directory (default: $INSTALL_DIR, i.e. ~/.local/bin)"
+'''
 run = '''
-set -e
-mkdir -p "$INSTALL_DIR"
+#!/usr/bin/env bash
+set -euo pipefail
+# Priority: --bin-path flag > $INSTALL_DIR env > ~/.local/bin
+DIR="${usage_bin_path:-${INSTALL_DIR:-$HOME/.local/bin}}"
+mkdir -p "$DIR"
 BIN="$(swift build -c release --show-bin-path)/HimalayaMcpCLI"
-install -m 0755 "$BIN" "$INSTALL_DIR/$BIN_NAME"
-echo "Installed $BIN_NAME -> $INSTALL_DIR/$BIN_NAME"
-if ! command -v "$BIN_NAME" >/dev/null 2>&1; then
-  echo "note: $INSTALL_DIR is not on your PATH yet — run: mise run setup-path"
-fi
+install -m 0755 "$BIN" "$DIR/$BIN_NAME"
+echo "Installed $BIN_NAME -> $DIR/$BIN_NAME"
+case ":${PATH}:" in
+  *":$DIR:"*) ;;
+  *) echo "note: $DIR is not on your PATH — run 'mise run setup-path' (for ~/.local/bin) or add it manually" ;;
+esac
 '''
 
 [tasks.uninstall]
-description = "Remove himalaya-mcp from $INSTALL_DIR"
+description = "Remove himalaya-mcp from a bin dir (default: ~/.local/bin)"
+usage = '''
+flag "--bin-path <dir>" help="Directory to remove from (default: $INSTALL_DIR, i.e. ~/.local/bin)"
+'''
 run = '''
-rm -f "$INSTALL_DIR/$BIN_NAME"
-echo "Removed $INSTALL_DIR/$BIN_NAME"
+#!/usr/bin/env bash
+set -euo pipefail
+DIR="${usage_bin_path:-${INSTALL_DIR:-$HOME/.local/bin}}"
+rm -f "$DIR/$BIN_NAME"
+echo "Removed $DIR/$BIN_NAME"
 '''
 
 [tasks.setup-path]

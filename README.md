@@ -175,12 +175,14 @@ sequenceDiagram
 directory (no `sudo`, nothing installed machine-wide):
 
 ```bash
-mise run install       # build -c release, then install to ~/.local/bin/himalaya-mcp
-mise run setup-path    # optional: add ~/.local/bin to PATH in your shell profile
+mise run install                          # build -c release → ~/.local/bin/himalaya-mcp
+mise run install --bin-path /usr/local/bin # …or install to a specific directory
+mise run setup-path                       # optional: add ~/.local/bin to PATH in your shell profile
 ```
 
-`mise run install` copies the release binary to `~/.local/bin/himalaya-mcp` (override the location
-with `INSTALL_DIR=/some/dir mise run install`). `~/.local/bin` is already on `PATH` inside this
+`mise run install` builds the release binary and copies it to `~/.local/bin/himalaya-mcp`. Pick a
+different directory with `--bin-path <dir>` (or `INSTALL_DIR=/some/dir mise run install`);
+`mise run uninstall [--bin-path <dir>]` removes it. `~/.local/bin` is already on `PATH` inside this
 project's mise environment; `setup-path` makes that permanent for your interactive shells.
 Run `mise tasks` to see everything (`build`, `test`, `run`, `install`, `uninstall`, `setup-path`,
 `mcp-add`).
