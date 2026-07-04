@@ -13,6 +13,9 @@ jobs:
   ci:
     uses: amine2233/ci-shared/.github/workflows/ci.yml@1.0.2
     with:
+      # swift-configuration 1.0 uses Foundation's `Data.bytes` (RawSpan), which
+      # only exists in the 2025 SDKs — needs the macOS 26 / Xcode 26 image.
+      macos-runner: "macos-26"
       # Swift is provisioned via mise ([tools] in mise.toml), so the ubuntu
       # runner builds and tests too.
       enable-macos: true
