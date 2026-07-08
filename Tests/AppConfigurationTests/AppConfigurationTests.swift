@@ -12,6 +12,18 @@ func experimentalFlagReadsFromEnvironment() {
 }
 
 @Test
+func accountFromReadsFromEnvironmentKey() {
+    let config = ConfigReader(provider: EnvironmentVariablesProvider(environmentVariables: [
+        "HIMALAYA_ACCOUNTS_OUTLOOK_FROM": "amine.bensalah@outlook.com"
+    ]))
+    let accounts = ConfigurationLoader.accountFrom(from: config)
+
+    #expect(accounts.from(forAccount: "outlook") == "amine.bensalah@outlook.com")
+    #expect(accounts.from(forAccount: "proton") == nil)
+    #expect(AccountFromNames.none.from(forAccount: "outlook") == nil)
+}
+
+@Test
 func experimentalFlagDefaultsToFalse() {
     let config = ConfigReader(provider: EnvironmentVariablesProvider(environmentVariables: [:]))
 

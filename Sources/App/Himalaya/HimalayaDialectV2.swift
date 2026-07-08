@@ -12,10 +12,16 @@ public struct HimalayaDialectV2: HimalayaDialect {
 
     private let defaultAccount: String?
     private let defaultFolder: String?
+    private let accountFrom: AccountFromNames
 
-    public init(defaultAccount: String? = nil, defaultFolder: String? = nil) {
+    public init(
+        defaultAccount: String? = nil,
+        defaultFolder: String? = nil,
+        accountFrom: AccountFromNames = .none
+    ) {
         self.defaultAccount = defaultAccount
         self.defaultFolder = defaultFolder
+        self.accountFrom = accountFrom
     }
 
     private func mailboxArgs(_ mailbox: String?) -> [String] {
@@ -24,6 +30,13 @@ public struct HimalayaDialectV2: HimalayaDialect {
 
     private func accountArgs(_ account: String?) -> [String] {
         (account ?? defaultAccount).map { ["--account", $0] } ?? []
+    }
+
+    /// The effective From: explicit value wins, else the per-account default.
+    private func resolvedFrom(_ from: String?, account: String?) -> String? {
+        if let from { return from }
+        if let account = account ?? defaultAccount { return accountFrom.from(forAccount: account) }
+        return nil
     }
 
     public func listEnvelopes(
@@ -93,13 +106,32 @@ public struct HimalayaDialectV2: HimalayaDialect {
         return HimalayaInvocation(args + [id] + accountArgs(account))
     }
 
-    public func composeTemplate(
+    public func composeMessage(
+        from: String?,
         to: String,
+        cc: String?,
+        bcc: String?,
         subject: String,
         body: String,
+        attachments: [String],
         account: String?
-    ) throws -> HimalayaInvocation {
-        throw unsupported("Composing a template (compose_email)")
+    ) -> HimalayaInvocation {
+        // v2: `message compose` writes RFC 5322 to stdout; native `--attach`.
+        var args = ["message", "compose", "--to", to, "--subject", subject, "--body", body]
+        if let from = resolvedFrom(from, account: account) { args += ["--from", from] }
+        if let cc { args += ["--cc", cc] }
+        if let bcc { args += ["--bcc", bcc] }
+        for path in attachments {
+            args += ["--attach", path]
+        }
+        return HimalayaInvocation(args + accountArgs(account))
+    }
+
+    public func saveMessage(_ message: String, folder: String, account: String?) -> HimalayaInvocation {
+        HimalayaInvocation(
+            ["message", "save", "--mailbox", folder] + accountArgs(account),
+            standardInput: message
+        )
     }
 
     public func replyTemplate(

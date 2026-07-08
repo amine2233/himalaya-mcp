@@ -28,12 +28,16 @@ private final class RecordingExecutable: ExecutableService {
 }
 
 /// A himalaya stub that records the arguments and stdin of each `run` call.
+/// `outputFor`, when set, returns a per-call output based on the arguments;
+/// otherwise the fixed `output` is returned.
 private final class RecordingHimalaya: HimalayaService {
     let calls = Mutex<[[String]]>([])
     let stdins = Mutex<[String?]>([])
     let output: String
-    init(output: String = "") {
+    let outputFor: (@Sendable ([String]) -> String)?
+    init(output: String = "", outputFor: (@Sendable ([String]) -> String)? = nil) {
         self.output = output
+        self.outputFor = outputFor
     }
 
     func resolveExecutablePath() throws -> String {
@@ -43,7 +47,7 @@ private final class RecordingHimalaya: HimalayaService {
     func run(arguments: [String], standardInput: String?) throws -> String {
         calls.withLock { $0.append(arguments) }
         stdins.withLock { $0.append(standardInput) }
-        return output
+        return outputFor?(arguments) ?? output
     }
 }
 
@@ -51,10 +55,11 @@ private final class RecordingHimalaya: HimalayaService {
 /// and returns both.
 private func appWithRecordingHimalaya(
     output: String = "",
+    outputFor: (@Sendable ([String]) -> String)? = nil,
     dialect: any HimalayaDialect = HimalayaDialectV1()
 ) -> (Application, RecordingHimalaya) {
     let app = Application()
-    let himalaya = RecordingHimalaya(output: output)
+    let himalaya = RecordingHimalaya(output: output, outputFor: outputFor)
     app.register(HimalayaServiceKey.self) { _ in himalaya }
     app.register(HimalayaDialectKey.self) { _ in dialect }
     return (app, himalaya)
@@ -240,31 +245,81 @@ func moveEmailInputDecodesTargetFolderSnakeCase() throws {
 }
 
 @Test
-func composeEmailBuildsHeadersAndBody() async throws {
-    let (app, himalaya) = appWithRecordingHimalaya(output: "template")
-    let input = ComposeEmailRequest.Input(to: "a@b.c", subject: "Hi", body: "Hello")
-    let output = try await ComposeEmailRequest().execute(input, in: app)
+func sendEmailPreviewComposesOnly() async throws {
+    let (app, himalaya) = appWithRecordingHimalaya(output: "COMPOSED")
+    // action omitted → preview.
+    let output = try await SendEmailRequest().execute(
+        SendEmailRequest.Input(to: "a@b.c", subject: "Hi", body: "Hello"), in: app
+    )
 
-    #expect(output == "template")
+    #expect(output == "Draft (not saved/sent):\n\nCOMPOSED")
+    // Only the compose call ran (v1 `template write`); nothing saved/sent.
     #expect(himalaya.calls.withLock { $0 } == [[
         "template", "write", "--header", "To:a@b.c", "--header", "Subject:Hi", "Hello"
     ]])
 }
 
 @Test
-func composeEmailAppendsAttachmentMML() async throws {
+func sendEmailComposeAppendsAttachmentMMLv1() async throws {
     let (app, himalaya) = appWithRecordingHimalaya()
-    let input = ComposeEmailRequest.Input(
-        to: "a@b.c",
-        subject: "Hi",
-        body: "Hello",
-        attachments: ["/tmp/report.pdf"]
+    _ = try await SendEmailRequest().execute(
+        SendEmailRequest.Input(to: "a@b.c", subject: "Hi", body: "Hello", attachments: ["/tmp/report.pdf"]),
+        in: app
     )
-    _ = try await ComposeEmailRequest().execute(input, in: app)
-
     let body = try #require(himalaya.calls.withLock { $0 }.first?.last)
     #expect(body.contains("Hello"))
     #expect(body.contains(#"<#part filename="/tmp/report.pdf" disposition=attachment><#/part>"#))
+}
+
+@Test
+func sendEmailDraftSavesToDrafts() async throws {
+    // Compose returns the composed message; save returns empty.
+    let (app, himalaya) = appWithRecordingHimalaya(
+        outputFor: { $0.first == "template" && $0.dropFirst().first == "write" ? "COMPOSED" : "" }
+    )
+    let output = try await SendEmailRequest().execute(
+        SendEmailRequest.Input(to: "a@b.c", subject: "Hi", body: "Hello", account: "work", action: .draft),
+        in: app
+    )
+
+    #expect(output == "Draft saved to Drafts.")
+    let calls = himalaya.calls.withLock { $0 }
+    #expect(calls.count == 2)
+    #expect(calls[1] == ["template", "save", "--folder", "Drafts", "--account", "work"])
+    #expect(himalaya.stdins.withLock { $0 }.last == "COMPOSED") // composed message piped to save
+}
+
+@Test
+func sendEmailDraftHonoursDraftFolder() async throws {
+    let (app, himalaya) = appWithRecordingHimalaya()
+    _ = try await SendEmailRequest().execute(
+        SendEmailRequest.Input(
+            to: "a@b.c",
+            subject: "Hi",
+            body: "Hello",
+            action: .draft,
+            draftFolder: "Labels/Drafts"
+        ),
+        in: app
+    )
+    #expect(himalaya.calls.withLock { $0 }.last == ["template", "save", "--folder", "Labels/Drafts"])
+}
+
+@Test
+func sendEmailSendsWhenActionSend() async throws {
+    let (app, himalaya) = appWithRecordingHimalaya(
+        outputFor: { $0.first == "template" && $0.dropFirst().first == "write" ? "COMPOSED" : "" }
+    )
+    let output = try await SendEmailRequest().execute(
+        SendEmailRequest.Input(to: "a@b.c", subject: "Hi", body: "Hello", account: "work", action: .send),
+        in: app
+    )
+
+    #expect(output == "Message sent.")
+    let calls = himalaya.calls.withLock { $0 }
+    #expect(calls.count == 2)
+    #expect(calls[1] == ["template", "send", "--account", "work"])
+    #expect(himalaya.stdins.withLock { $0 }.last == "COMPOSED") // composed message piped to send
 }
 
 @Test
@@ -284,27 +339,6 @@ func draftReplyOmitsAllFlagWhenNotRequested() async throws {
     _ = try await DraftReplyRequest().execute(DraftReplyRequest.Input(id: "5"), in: app)
 
     #expect(himalaya.calls.withLock { $0 } == [["template", "reply", "5"]])
-}
-
-@Test
-func sendEmailRefusesWithoutConfirmation() async throws {
-    let (app, himalaya) = appWithRecordingHimalaya()
-    let output = try await SendEmailRequest().execute(SendEmailRequest.Input(template: "raw"), in: app)
-
-    #expect(output == "Refusing to send: set confirm=true to actually send the message.")
-    // himalaya must not have been invoked.
-    #expect(himalaya.calls.withLock { $0 }.isEmpty)
-}
-
-@Test
-func sendEmailSendsWhenConfirmed() async throws {
-    let (app, himalaya) = appWithRecordingHimalaya(output: "")
-    let input = SendEmailRequest.Input(template: "raw message", confirm: true, account: "work")
-    let output = try await SendEmailRequest().execute(input, in: app)
-
-    #expect(output == "Message sent.")
-    #expect(himalaya.calls.withLock { $0 } == [["template", "send", "--account", "work"]])
-    #expect(himalaya.stdins.withLock { $0 } == ["raw message"])
 }
 
 @Test
@@ -532,8 +566,45 @@ func v1DialectGeneratesEveryCommand() throws {
         == ["flag", "remove", "9", "Seen"])
     #expect(try d.moveMessage(id: "3", target: "Archive", mailbox: "INBOX", account: "work").arguments
         == ["message", "move", "Archive", "3", "--folder", "INBOX", "--account", "work"])
-    #expect(try d.composeTemplate(to: "a@b.c", subject: "Hi", body: "Body", account: nil).arguments
+    #expect(try d.composeMessage(
+        from: nil,
+        to: "a@b.c",
+        cc: nil,
+        bcc: nil,
+        subject: "Hi",
+        body: "Body",
+        attachments: [],
+        account: nil
+    ).arguments
         == ["template", "write", "--header", "To:a@b.c", "--header", "Subject:Hi", "Body"])
+    #expect(try d.composeMessage(
+        from: "me@x.y",
+        to: "a@b.c",
+        cc: "c@x.y",
+        bcc: nil,
+        subject: "Hi",
+        body: "Body",
+        attachments: [],
+        account: nil
+    ).arguments
+        == [
+            "template",
+            "write",
+            "--header",
+            "To:a@b.c",
+            "--header",
+            "From:me@x.y",
+            "--header",
+            "Cc:c@x.y",
+            "--header",
+            "Subject:Hi",
+            "Body"
+        ])
+    #expect(try d.saveMessage("MSG", folder: "Drafts", account: "work")
+        == HimalayaInvocation(
+            ["template", "save", "--folder", "Drafts", "--account", "work"],
+            standardInput: "MSG"
+        ))
     #expect(try d.replyTemplate(id: "5", body: "Thanks", all: true, mailbox: "INBOX", account: nil).arguments
         == ["template", "reply", "5", "--all", "--folder", "INBOX", "Thanks"])
     #expect(try d.replyTemplate(id: "5", body: nil, all: false, mailbox: nil, account: nil).arguments
@@ -619,12 +690,88 @@ func v2DialectRejectsUnsupportedCommands() {
         { try d.exportMessage(id: "1", destination: "/tmp", mailbox: nil, account: nil) },
         { try d.createMailbox(name: "X", account: nil) },
         { try d.deleteMailbox(name: "X", account: nil) },
-        { try d.composeTemplate(to: "a", subject: "b", body: "c", account: nil) },
         { try d.replyTemplate(id: "1", body: nil, all: false, mailbox: nil, account: nil) },
         { try d.deleteMessages(ids: ["1"], mailbox: nil, account: nil) }
     ] {
         #expect(throws: (any Error).self) { _ = try probe() }
     }
+}
+
+@Test
+func v2DialectComposesAndSavesMessage() throws {
+    let d = HimalayaDialectV2()
+    #expect(try d.composeMessage(
+        from: "me@x.y",
+        to: "a@b.c",
+        cc: "c@x.y",
+        bcc: nil,
+        subject: "Hi",
+        body: "Body",
+        attachments: ["/tmp/f.pdf"],
+        account: "work"
+    ).arguments
+        == [
+            "message",
+            "compose",
+            "--to",
+            "a@b.c",
+            "--subject",
+            "Hi",
+            "--body",
+            "Body",
+            "--from",
+            "me@x.y",
+            "--cc",
+            "c@x.y",
+            "--attach",
+            "/tmp/f.pdf",
+            "--account",
+            "work"
+        ])
+    #expect(try d.saveMessage("MSG", folder: "Drafts", account: nil)
+        == HimalayaInvocation(["message", "save", "--mailbox", "Drafts"], standardInput: "MSG"))
+}
+
+@Test
+func dialectResolvesPerAccountFrom() throws {
+    let from = AccountFromNames { $0 == "outlook" ? "amine.bensalah@outlook.com" : nil }
+    let v2 = HimalayaDialectV2(accountFrom: from)
+    // From omitted → per-account default used.
+    #expect(try v2.composeMessage(
+        from: nil,
+        to: "a@b.c",
+        cc: nil,
+        bcc: nil,
+        subject: "Hi",
+        body: "B",
+        attachments: [],
+        account: "outlook"
+    ).arguments
+        .contains("amine.bensalah@outlook.com"))
+    // Explicit from wins.
+    #expect(try v2.composeMessage(
+        from: "x@y.z",
+        to: "a@b.c",
+        cc: nil,
+        bcc: nil,
+        subject: "Hi",
+        body: "B",
+        attachments: [],
+        account: "outlook"
+    ).arguments
+        .contains("x@y.z"))
+    // Unknown account → no --from.
+    #expect(try v2.composeMessage(
+        from: nil,
+        to: "a@b.c",
+        cc: nil,
+        bcc: nil,
+        subject: "Hi",
+        body: "B",
+        attachments: [],
+        account: "proton"
+    ).arguments
+        .contains("--from") == false)
 }
 
 @Test

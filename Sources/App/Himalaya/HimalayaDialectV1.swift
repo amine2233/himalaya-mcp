@@ -10,10 +10,16 @@ public struct HimalayaDialectV1: HimalayaDialect {
 
     private let defaultAccount: String?
     private let defaultFolder: String?
+    private let accountFrom: AccountFromNames
 
-    public init(defaultAccount: String? = nil, defaultFolder: String? = nil) {
+    public init(
+        defaultAccount: String? = nil,
+        defaultFolder: String? = nil,
+        accountFrom: AccountFromNames = .none
+    ) {
         self.defaultAccount = defaultAccount
         self.defaultFolder = defaultFolder
+        self.accountFrom = accountFrom
     }
 
     private func folderArgs(_ mailbox: String?) -> [String] {
@@ -22,6 +28,13 @@ public struct HimalayaDialectV1: HimalayaDialect {
 
     private func accountArgs(_ account: String?) -> [String] {
         (account ?? defaultAccount).map { ["--account", $0] } ?? []
+    }
+
+    /// The effective From: explicit value wins, else the per-account default.
+    private func resolvedFrom(_ from: String?, account: String?) -> String? {
+        if let from { return from }
+        if let account = account ?? defaultAccount { return accountFrom.from(forAccount: account) }
+        return nil
     }
 
     public func listEnvelopes(
@@ -91,15 +104,31 @@ public struct HimalayaDialectV1: HimalayaDialect {
         HimalayaInvocation(["message", "move", target, id] + folderArgs(mailbox) + accountArgs(account))
     }
 
-    public func composeTemplate(
+    public func composeMessage(
+        from: String?,
         to: String,
+        cc: String?,
+        bcc: String?,
         subject: String,
         body: String,
+        attachments: [String],
         account: String?
     ) -> HimalayaInvocation {
+        var args = ["template", "write", "--header", "To:\(to)"]
+        if let from = resolvedFrom(from, account: account) { args += ["--header", "From:\(from)"] }
+        if let cc { args += ["--header", "Cc:\(cc)"] }
+        if let bcc { args += ["--header", "Bcc:\(bcc)"] }
+        args += ["--header", "Subject:\(subject)"]
+        args += accountArgs(account)
+        // v1 has no --attach; attachments go in the body as MML.
+        args.append(MMLAttachment.appended(to: body, paths: attachments))
+        return HimalayaInvocation(args)
+    }
+
+    public func saveMessage(_ message: String, folder: String, account: String?) -> HimalayaInvocation {
         HimalayaInvocation(
-            ["template", "write", "--header", "To:\(to)", "--header", "Subject:\(subject)"] +
-                accountArgs(account) + [body]
+            ["template", "save", "--folder", folder] + accountArgs(account),
+            standardInput: message
         )
     }
 

@@ -34,7 +34,7 @@ extension ToolHandler {
         .listEmails, .searchEmails, .readEmail, .readEmailHtml,
         .listFolders, .createFolder, .deleteFolder,
         .flagEmail, .moveEmail,
-        .composeEmail, .draftReply, .sendEmail, .sendTemplate,
+        .draftReply, .sendEmail, .sendTemplate,
         .listAttachments, .downloadAttachment,
         .deleteEmail
     ]
@@ -252,37 +252,6 @@ extension ToolHandler {
 
     // MARK: Composing & sending
 
-    static let composeEmail = ToolHandler(
-        tool: Tool(
-            name: "compose_email",
-            description: "Compose a new email template (does not send). Returns a template for send_email.",
-            inputSchema: .object([
-                "type": .string("object"),
-                "properties": .object([
-                    "to": .object([
-                        "type": .string("string"),
-                        "description": .string("Recipient address.")
-                    ]),
-                    "subject": .object([
-                        "type": .string("string"),
-                        "description": .string("Subject line.")
-                    ]),
-                    "body": .object([
-                        "type": .string("string"),
-                        "description": .string("Plain-text body.")
-                    ]),
-                    "attachments": attachmentsProperty,
-                    "account": accountProperty
-                ]),
-                "required": .array([.string("to"), .string("subject"), .string("body")])
-            ])
-        ),
-        call: { params, application in
-            let input = try decodeArguments(ComposeEmailRequest.Input.self, from: params.arguments)
-            return try await ComposeEmailRequest().execute(input, in: application)
-        }
-    )
-
     static let draftReply = ToolHandler(
         tool: Tool(
             name: "draft_reply",
@@ -317,24 +286,51 @@ extension ToolHandler {
     static let sendEmail = ToolHandler(
         tool: Tool(
             name: "send_email",
-            description: "Send a message template. Requires confirm=true; irreversible.",
+            description: "Compose an email, then preview it, save it as a draft, or send it (action=preview|draft|send). Sending is irreversible.",
             inputSchema: .object([
                 "type": .string("object"),
                 "properties": .object([
-                    "template": .object([
+                    "to": .object([
+                        "type": .string("string"),
+                        "description": .string("Recipient address.")
+                    ]),
+                    "subject": .object([
+                        "type": .string("string"),
+                        "description": .string("Subject line.")
+                    ]),
+                    "body": .object([
+                        "type": .string("string"),
+                        "description": .string("Plain-text body.")
+                    ]),
+                    "cc": .object([
+                        "type": .string("string"),
+                        "description": .string("Cc address(es).")
+                    ]),
+                    "bcc": .object([
+                        "type": .string("string"),
+                        "description": .string("Bcc address(es).")
+                    ]),
+                    "from": .object([
                         "type": .string("string"),
                         "description": .string(
-                            "Raw message/template to send (from compose_email or draft_reply)."
+                            "Sender address; defaults to the account's HIMALAYA_ACCOUNTS_<NAME>_FROM (v1 auto-fills)."
                         )
                     ]),
                     "attachments": attachmentsProperty,
-                    "confirm": .object([
-                        "type": .string("boolean"),
-                        "description": .string("Must be true to actually send.")
+                    "action": .object([
+                        "type": .string("string"),
+                        "enum": .array([.string("preview"), .string("draft"), .string("send")]),
+                        "description": .string(
+                            "preview (default): return the composed message; draft: save to Drafts; send: send it."
+                        )
+                    ]),
+                    "draft_folder": .object([
+                        "type": .string("string"),
+                        "description": .string("Mailbox for drafts. Defaults to Drafts.")
                     ]),
                     "account": accountProperty
                 ]),
-                "required": .array([.string("template")])
+                "required": .array([.string("to"), .string("subject"), .string("body")])
             ])
         ),
         call: { params, application in
