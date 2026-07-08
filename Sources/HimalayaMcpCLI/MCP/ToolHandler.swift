@@ -313,7 +313,7 @@ extension ToolHandler {
                     "from": .object([
                         "type": .string("string"),
                         "description": .string(
-                            "Sender address; defaults to the account's HIMALAYA_ACCOUNTS_<NAME>_FROM (v1 auto-fills)."
+                            "Sender address. On v1 himalaya auto-fills it; v2 needs it for draft/send."
                         )
                     ]),
                     "attachments": attachmentsProperty,

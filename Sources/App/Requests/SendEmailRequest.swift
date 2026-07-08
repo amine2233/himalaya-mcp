@@ -23,8 +23,7 @@ public struct SendEmailRequest: Request {
         public let body: String
         public let cc: String?
         public let bcc: String?
-        /// Sender address. `nil` falls back to the per-account default
-        /// (`HIMALAYA_ACCOUNTS_<NAME>_FROM`); on v1 himalaya auto-fills it.
+        /// Sender address. On v1 himalaya auto-fills it; v2 needs it for draft/send.
         public let from: String?
         /// Absolute paths of files to attach.
         public let attachments: [String]?

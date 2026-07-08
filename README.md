@@ -44,8 +44,8 @@ searching `PATH`. Notes on the less obvious mappings:
   `from alice and subject invoice order by date desc`), split into tokens.
 - `send_email` composes from structured fields and, per its `action`, **previews** (default — returns
   the composed message, nothing sent/saved), saves a **draft** (to `Drafts`, override with
-  `draft_folder`), or **sends** it. `from` defaults to the per-account `HIMALAYA_ACCOUNTS_<NAME>_FROM`
-  (v1 auto-fills). Attachments are native on v2 (`--attach`) and MML `<#part>` on v1.
+  `draft_folder`), or **sends** it. On v1 himalaya auto-fills `From`; on v2 pass `from` for
+  draft/send. Attachments are native on v2 (`--attach`) and MML `<#part>` on v1.
 - `draft_reply` still produces a reply **template** (feed it to `send_template`); `send_template` sends
   a raw/bring-your-own message (needs `confirm=true`).
 - himalaya has no per-attachment listing/selection, so `list_attachments` and
@@ -100,16 +100,14 @@ on **`action`** (default `preview`):
 | `draft` | Saves the composed message to the **`Drafts`** mailbox (override with `draft_folder`) | `template save --folder` · `message save --mailbox` (stdin) | Yes — it's just a draft |
 | `send` | **Sends** the message — irreversible | `template send` · `message send` (stdin) | **No** |
 
-The **`from`** address falls back to the per-account default `HIMALAYA_ACCOUNTS_<NAME>_FROM`
-(config key `himalaya.accounts.<name>.from`). On **v1** himalaya auto-fills `From`, so it can stay unset;
-on **v2** a sender is required for `draft`/`send`. Attachments are **native** on v2 (`--attach <path>`)
-and appended as **MML** (`<#part filename="…">`) on v1.
+The **`from`** address is optional: on **v1** himalaya auto-fills `From`, so it can stay unset; on **v2**
+a sender is required for `draft`/`send`. Attachments are **native** on v2 (`--attach <path>`) and
+appended as **MML** (`<#part filename="…">`) on v1.
 
 ```mermaid
 flowchart TD
     Start(["send_email · Input<br/>to · subject · body<br/>cc? · bcc? · from? · attachments?<br/>account? · action? · draft_folder?"])
-    Resolve["Resolve From:<br/>input.from ?? HIMALAYA_ACCOUNTS_&lt;NAME&gt;_FROM<br/>(v1 auto-fills)"]
-    Compose["dialect.composeMessage(…)<br/>v1: template write --header …<br/>v2: message compose --to/--subject/--body…<br/>→ composed RFC 5322 message (stdout)"]
+    Compose["dialect.composeMessage(…)<br/>v1: template write --header … (auto-fills From)<br/>v2: message compose --to/--subject/--body [--from]…<br/>→ composed RFC 5322 message (stdout)"]
     Branch{"action?"}
 
     Preview["Return:<br/>&quot;Draft (not saved/sent):\n\n&quot; + composed"]
@@ -119,7 +117,7 @@ flowchart TD
     DraftOut["Return: &quot;Draft saved to &lt;folder&gt;.&quot;"]
     SendOut["Return: &quot;Message sent.&quot;"]
 
-    Start --> Resolve --> Compose --> Branch
+    Start --> Compose --> Branch
     Branch -->|preview default| Preview
     Branch -->|draft| Draft --> DraftOut
     Branch -->|send irreversible| Send --> SendOut
@@ -591,7 +589,6 @@ file**:
 | `experimental.enabled` | `EXPERIMENTAL_ENABLED` | `experimental.enabled` | `false` |
 | Default account | `HIMALAYA_ACCOUNT` | `himalaya.account` | system default |
 | Default folder | `HIMALAYA_FOLDER` | `himalaya.folder` | `INBOX` |
-| Per-account From (for `send_email`) | `HIMALAYA_ACCOUNTS_<NAME>_FROM` | `himalaya.accounts.<name>.from` | v1 auto-fills; v2 needs it |
 | Command timeout (ms) | `HIMALAYA_TIMEOUT` | `himalaya.timeout` | `120000` (2 min; `0` = unlimited) |
 | himalaya CLI version | `HIMALAYA_VERSION` | `himalaya.version` | `v1` (accepts `v1`/`1`, `v2`/`2`) |
 

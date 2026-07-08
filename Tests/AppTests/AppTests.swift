@@ -733,48 +733,6 @@ func v2DialectComposesAndSavesMessage() throws {
 }
 
 @Test
-func dialectResolvesPerAccountFrom() throws {
-    let from = AccountFromNames { $0 == "outlook" ? "amine.bensalah@outlook.com" : nil }
-    let v2 = HimalayaDialectV2(accountFrom: from)
-    // From omitted → per-account default used.
-    #expect(try v2.composeMessage(
-        from: nil,
-        to: "a@b.c",
-        cc: nil,
-        bcc: nil,
-        subject: "Hi",
-        body: "B",
-        attachments: [],
-        account: "outlook"
-    ).arguments
-        .contains("amine.bensalah@outlook.com"))
-    // Explicit from wins.
-    #expect(try v2.composeMessage(
-        from: "x@y.z",
-        to: "a@b.c",
-        cc: nil,
-        bcc: nil,
-        subject: "Hi",
-        body: "B",
-        attachments: [],
-        account: "outlook"
-    ).arguments
-        .contains("x@y.z"))
-    // Unknown account → no --from.
-    #expect(try v2.composeMessage(
-        from: nil,
-        to: "a@b.c",
-        cc: nil,
-        bcc: nil,
-        subject: "Hi",
-        body: "B",
-        attachments: [],
-        account: "proton"
-    ).arguments
-        .contains("--from") == false)
-}
-
-@Test
 func executableServiceTimesOutLongCommand() {
     let service = ExecutableServiceDefault(timeoutMilliseconds: 100)
 
