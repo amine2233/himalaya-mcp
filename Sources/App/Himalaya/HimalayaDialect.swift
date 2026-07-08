@@ -42,8 +42,20 @@ public protocol HimalayaDialect: Sendable {
     func moveMessage(id: String, target: String, mailbox: String?, account: String?) throws
         -> HimalayaInvocation
 
-    func composeTemplate(to: String, subject: String, body: String, account: String?) throws
-        -> HimalayaInvocation
+    /// Composes a message and writes it to stdout (no send/save). `from` may be
+    /// nil (on v1 himalaya auto-fills; on v2 it's resolved from per-account config).
+    func composeMessage(
+        from: String?,
+        to: String,
+        cc: String?,
+        bcc: String?,
+        subject: String,
+        body: String,
+        attachments: [String],
+        account: String?
+    ) throws -> HimalayaInvocation
+    /// Appends an already-composed message (piped via stdin) to `folder`.
+    func saveMessage(_ message: String, folder: String, account: String?) throws -> HimalayaInvocation
     func replyTemplate(id: String, body: String?, all: Bool, mailbox: String?, account: String?) throws
         -> HimalayaInvocation
     func sendTemplate(_ template: String, account: String?) throws -> HimalayaInvocation

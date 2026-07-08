@@ -91,15 +91,31 @@ public struct HimalayaDialectV1: HimalayaDialect {
         HimalayaInvocation(["message", "move", target, id] + folderArgs(mailbox) + accountArgs(account))
     }
 
-    public func composeTemplate(
+    public func composeMessage(
+        from: String?,
         to: String,
+        cc: String?,
+        bcc: String?,
         subject: String,
         body: String,
+        attachments: [String],
         account: String?
     ) -> HimalayaInvocation {
+        var args = ["template", "write", "--header", "To:\(to)"]
+        if let from { args += ["--header", "From:\(from)"] }
+        if let cc { args += ["--header", "Cc:\(cc)"] }
+        if let bcc { args += ["--header", "Bcc:\(bcc)"] }
+        args += ["--header", "Subject:\(subject)"]
+        args += accountArgs(account)
+        // v1 has no --attach; attachments go in the body as MML.
+        args.append(MMLAttachment.appended(to: body, paths: attachments))
+        return HimalayaInvocation(args)
+    }
+
+    public func saveMessage(_ message: String, folder: String, account: String?) -> HimalayaInvocation {
         HimalayaInvocation(
-            ["template", "write", "--header", "To:\(to)", "--header", "Subject:\(subject)"] +
-                accountArgs(account) + [body]
+            ["template", "save", "--folder", folder] + accountArgs(account),
+            standardInput: message
         )
     }
 

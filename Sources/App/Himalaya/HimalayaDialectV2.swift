@@ -93,13 +93,32 @@ public struct HimalayaDialectV2: HimalayaDialect {
         return HimalayaInvocation(args + [id] + accountArgs(account))
     }
 
-    public func composeTemplate(
+    public func composeMessage(
+        from: String?,
         to: String,
+        cc: String?,
+        bcc: String?,
         subject: String,
         body: String,
+        attachments: [String],
         account: String?
-    ) throws -> HimalayaInvocation {
-        throw unsupported("Composing a template (compose_email)")
+    ) -> HimalayaInvocation {
+        // v2: `message compose` writes RFC 5322 to stdout; native `--attach`.
+        var args = ["message", "compose", "--to", to, "--subject", subject, "--body", body]
+        if let from { args += ["--from", from] }
+        if let cc { args += ["--cc", cc] }
+        if let bcc { args += ["--bcc", bcc] }
+        for path in attachments {
+            args += ["--attach", path]
+        }
+        return HimalayaInvocation(args + accountArgs(account))
+    }
+
+    public func saveMessage(_ message: String, folder: String, account: String?) -> HimalayaInvocation {
+        HimalayaInvocation(
+            ["message", "save", "--mailbox", folder] + accountArgs(account),
+            standardInput: message
+        )
     }
 
     public func replyTemplate(
