@@ -18,11 +18,20 @@ public enum ConfigurationLoader {
         await FeatureFlags(config: configReader())
     }
 
-    /// Resolves both the feature flags and the himalaya settings from a single
-    /// configuration reader (avoids reading the config file twice).
-    public static func resolveAll() async -> (flags: FeatureFlags, settings: HimalayaSettings) {
+    /// Resolves the feature flags, himalaya settings, and per-account folder names
+    /// from a single configuration reader (avoids reading the config file twice).
+    public static func resolveAll() async
+        -> (flags: FeatureFlags, settings: HimalayaSettings, accounts: AccountFolderNames) {
         let reader = await configReader()
-        return (FeatureFlags(config: reader), HimalayaSettings(config: reader))
+        return (FeatureFlags(config: reader), HimalayaSettings(config: reader), accountFolders(from: reader))
+    }
+
+    /// Builds the per-account folder-name resolver, reading each account's inbox
+    /// from `himalaya.accounts.<account>.inbox-name` (env `HIMALAYA_ACCOUNTS_<NAME>_INBOX_NAME`).
+    static func accountFolders(from reader: ConfigReader) -> AccountFolderNames {
+        AccountFolderNames { account in
+            reader.string(forKey: ConfigKey(["himalaya", "accounts", account, "inbox-name"]))
+        }
     }
 
     /// Builds a `ConfigReader` from the environment (highest precedence) layered

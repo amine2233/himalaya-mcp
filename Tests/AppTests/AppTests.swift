@@ -633,6 +633,49 @@ func v1DialectDefaultsFillOnlyWhenOmitted() throws {
         == ["message", "read", "1", "--no-headers", "--folder", "Sent", "--account", "perso"])
 }
 
+@Test
+func v1DialectUsesPerAccountInboxWhenFolderOmitted() throws {
+    let d = HimalayaDialectV1(
+        defaultFolder: "INBOX",
+        accountFolders: AccountFolderNames { $0 == "outlook" ? "Inbox" : nil }
+    )
+    // outlook has an override → used as the default folder.
+    #expect(try d.listEnvelopes(mailbox: nil, pageSize: nil, page: nil, account: "outlook").arguments
+        == ["envelope", "list", "--folder", "Inbox", "--account", "outlook"])
+    // proton has no override → falls back to the global default folder.
+    #expect(try d.listEnvelopes(mailbox: nil, pageSize: nil, page: nil, account: "proton").arguments
+        == ["envelope", "list", "--folder", "INBOX", "--account", "proton"])
+    // An explicit folder always wins over the per-account inbox.
+    #expect(try d.listEnvelopes(mailbox: "Sent", pageSize: nil, page: nil, account: "outlook").arguments
+        == ["envelope", "list", "--folder", "Sent", "--account", "outlook"])
+}
+
+@Test
+func v1DialectUsesPerAccountInboxForTheDefaultAccount() throws {
+    // When no per-call account is given, the default account's override applies.
+    let d = HimalayaDialectV1(
+        defaultAccount: "outlook",
+        accountFolders: AccountFolderNames { $0 == "outlook" ? "Inbox" : nil }
+    )
+    #expect(try d.readMessage(id: "5", mailbox: nil, account: nil).arguments
+        == ["message", "read", "5", "--no-headers", "--folder", "Inbox", "--account", "outlook"])
+}
+
+@Test
+func v2DialectUsesPerAccountInbox() {
+    let d = HimalayaDialectV2(
+        defaultFolder: "INBOX",
+        accountFolders: AccountFolderNames { $0 == "outlook" ? "Inbox" : nil }
+    )
+    #expect(d.listEnvelopes(mailbox: nil, pageSize: nil, page: nil, account: "outlook").arguments
+        == ["envelope", "list", "--mailbox", "Inbox", "--account", "outlook"])
+    #expect(d.listEnvelopes(mailbox: nil, pageSize: nil, page: nil, account: "proton").arguments
+        == ["envelope", "list", "--mailbox", "INBOX", "--account", "proton"])
+    // move source (--from) is also per-account-aware.
+    #expect(d.moveMessage(id: "3", target: "Archive", mailbox: nil, account: "outlook").arguments
+        == ["message", "move", "--to", "Archive", "--from", "Inbox", "3", "--account", "outlook"])
+}
+
 // MARK: - Full v2 dialect argument generation
 
 @Test

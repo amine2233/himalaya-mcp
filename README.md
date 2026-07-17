@@ -589,6 +589,7 @@ file**:
 | `experimental.enabled` | `EXPERIMENTAL_ENABLED` | `experimental.enabled` | `false` |
 | Default account | `HIMALAYA_ACCOUNT` | `himalaya.account` | system default |
 | Default folder | `HIMALAYA_FOLDER` | `himalaya.folder` | `INBOX` |
+| Per-account inbox name | `HIMALAYA_ACCOUNTS_<NAME>_INBOX_NAME` | `himalaya.accounts.<name>.inbox-name` | falls back to default folder |
 | Command timeout (ms) | `HIMALAYA_TIMEOUT` | `himalaya.timeout` | `120000` (2 min; `0` = unlimited) |
 | himalaya CLI version | `HIMALAYA_VERSION` | `himalaya.version` | `v1` (accepts `v1`/`1`, `v2`/`2`) |
 
@@ -600,13 +601,36 @@ missing file is fine; env always wins over the file.
 ```json
 {
   "experimental": { "enabled": true },
-  "himalaya": { "account": "work", "folder": "INBOX", "timeout": 120000 }
+  "himalaya": {
+    "account": "work",
+    "folder": "INBOX",
+    "timeout": 120000,
+    "accounts": {
+      "outlook": { "inbox-name": "Inbox" }
+    }
+  }
 }
 ```
 
 `HIMALAYA_ACCOUNT` / `HIMALAYA_FOLDER` default the account/mailbox on every command when a call omits
 them. `HIMALAYA_TIMEOUT` bounds each subprocess; exceeding it terminates the command and returns a
 timeout error.
+
+#### Per-account inbox name
+
+Accounts often name their inbox differently (e.g. Proton → `INBOX`, Outlook → `Inbox`). Set a
+per-account inbox with `HIMALAYA_ACCOUNTS_<ACCOUNT>_INBOX_NAME` (the account name uppercased, with
+non-alphanumerics as `_`), or the file key `himalaya.accounts.<account>.inbox-name`:
+
+```bash
+HIMALAYA_ACCOUNTS_OUTLOOK_INBOX_NAME=Inbox
+HIMALAYA_ACCOUNTS_OUTLOOK_PERSONAL_INBOX_NAME=Inbox
+```
+
+When a tool call **omits** `folder`, that account's inbox name is used as the default (per the
+effective account = the call's `account` or `HIMALAYA_ACCOUNT`); accounts without an override fall back
+to `HIMALAYA_FOLDER`. An explicit `folder` argument always wins. So `list_emails { account: "outlook" }`
+runs against `Inbox`, while `list_emails { account: "proton" }` uses the global default.
 
 ### himalaya v1 vs v2
 
