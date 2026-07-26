@@ -56,13 +56,45 @@ private final class RecordingHimalaya: HimalayaService {
 private func appWithRecordingHimalaya(
     output: String = "",
     outputFor: (@Sendable ([String]) -> String)? = nil,
-    dialect: any HimalayaDialect = HimalayaDialectV1()
+    dialect: any HimalayaDialect = HimalayaDialectV1(),
+    mml: (any MMLService)? = nil,
+    capabilities: Capabilities? = nil
 ) -> (Application, RecordingHimalaya) {
     let app = Application()
     let himalaya = RecordingHimalaya(output: output, outputFor: outputFor)
     app.register(HimalayaServiceKey.self) { _ in himalaya }
     app.register(HimalayaDialectKey.self) { _ in dialect }
+    let mmlService: any MMLService = mml ?? StubMML(available: true, compileResult: "COMPILED")
+    app.register(MMLServiceKey.self) { _ in mmlService }
+    let caps = capabilities ?? Capabilities(
+        himalayaVersion: "test",
+        himalayaFamily: .v1,
+        mmlPresent: true,
+        mmlVersion: "1.1.1",
+        templateStrategy: .mmlExternal
+    )
+    app.register(CapabilitiesKey.self) { _ in caps }
     return (app, himalaya)
+}
+
+/// A stub MML service for tests.
+private struct StubMML: MMLService {
+    let available: Bool
+    let compileResult: String
+    let error: (any Error)?
+
+    init(available: Bool, compileResult: String = "", error: (any Error)? = nil) {
+        self.available = available
+        self.compileResult = compileResult
+        self.error = error
+    }
+
+    func compile(_ input: String) throws -> String {
+        if let error { throw error }
+        return compileResult
+    }
+    func isAvailable() -> Bool { available }
+    func version() -> String? { available ? "1.1.1" : nil }
 }
 
 /// A himalaya stub whose output depends on the arguments (for multi-call flows).
@@ -86,6 +118,11 @@ private func appWithScriptedHimalaya(_ himalaya: ScriptedHimalaya) -> Applicatio
     let app = Application()
     app.register(HimalayaServiceKey.self) { _ in himalaya }
     app.register(HimalayaDialectKey.self) { _ in HimalayaDialectV1() }
+    app.register(MMLServiceKey.self) { _ in StubMML(available: true, compileResult: "COMPILED") }
+    app.register(CapabilitiesKey.self) { _ in Capabilities(
+        himalayaVersion: "test", himalayaFamily: .v1, mmlPresent: true,
+        mmlVersion: "1.1.1", templateStrategy: .mmlExternal
+    ) }
     return app
 }
 
@@ -343,18 +380,24 @@ func draftReplyOmitsAllFlagWhenNotRequested() async throws {
 
 @Test
 func sendTemplateSendsInlineTemplateWhenConfirmed() async throws {
-    let (app, himalaya) = appWithRecordingHimalaya()
+    let compiledMime = "From: a@b.c\r\nMIME-Version: 1.0\r\n\r\nHi"
+    let (app, himalaya) = appWithRecordingHimalaya(
+        mml: StubMML(available: true, compileResult: compiledMime)
+    )
     let input = SendTemplateRequest.Input(template: "From: a@b.c\n\nHi", confirm: true)
     let output = try await SendTemplateRequest().execute(input, in: app)
 
-    #expect(output == "Template sent.")
+    #expect(output == "sent: true")
     #expect(himalaya.calls.withLock { $0 } == [["template", "send"]])
-    #expect(himalaya.stdins.withLock { $0 } == ["From: a@b.c\n\nHi"])
+    #expect(himalaya.stdins.withLock { $0 } == [compiledMime])
 }
 
 @Test
 func sendTemplateRefusesWithoutConfirmation() async throws {
-    let (app, himalaya) = appWithRecordingHimalaya()
+    let compiledMime = "MIME-Version: 1.0\r\n\r\nx"
+    let (app, himalaya) = appWithRecordingHimalaya(
+        mml: StubMML(available: true, compileResult: compiledMime)
+    )
     let output = try await SendTemplateRequest().execute(
         SendTemplateRequest.Input(template: "x", confirm: false), in: app
     )
@@ -371,12 +414,15 @@ func sendTemplateReadsFromFile() async throws {
     let file = dir.appendingPathComponent("draft.eml")
     try Data("From: a@b.c\n\nFrom a file".utf8).write(to: file)
 
-    let (app, himalaya) = appWithRecordingHimalaya()
+    let compiledMime = "From: a@b.c\r\n\r\nFrom a file compiled"
+    let (app, himalaya) = appWithRecordingHimalaya(
+        mml: StubMML(available: true, compileResult: compiledMime)
+    )
     _ = try await SendTemplateRequest().execute(
         SendTemplateRequest.Input(templateFile: file.path, confirm: true), in: app
     )
     #expect(himalaya.calls.withLock { $0 } == [["template", "send"]])
-    #expect(himalaya.stdins.withLock { $0 } == ["From: a@b.c\n\nFrom a file"])
+    #expect(himalaya.stdins.withLock { $0 } == [compiledMime])
 }
 
 @Test
@@ -998,4 +1044,121 @@ func singletonIsCachedAndTransientIsRebuilt() {
 
     #expect(singletonBuilds.withLock { $0 } == 1) // built once, then cached
     #expect(transientBuilds.withLock { $0 } == 2) // rebuilt each time
+}
+
+// MARK: - Acceptance tests (§11)
+
+@Test
+func sendMessageTextPlainSentVerbatim() async throws {
+    let raw = "From: a@b.com\r\nTo: c@d.com\r\nSubject: test\r\n\r\nHello plain"
+    let (app, himalaya) = appWithRecordingHimalaya()
+    let output = try await SendMessageRequest().execute(
+        SendMessageRequest.Input(message: raw, account: "work"), in: app
+    )
+    #expect(output == "sent: true")
+    #expect(himalaya.stdins.withLock { $0 } == [raw])
+}
+
+@Test
+func sendMessageValidatesHeaderBodySeparator() async throws {
+    let noSeparator = "From: a@b.com\r\nTo: c@d.com\r\nno blank line here"
+    let (app, _) = appWithRecordingHimalaya()
+    await #expect(throws: AppError.missingHeaderBodySeparator) {
+        try await SendMessageRequest().execute(
+            SendMessageRequest.Input(message: noSeparator), in: app
+        )
+    }
+}
+
+@Test
+func sendMessageDryRunReturnsNormalizedMimeWithoutSending() async throws {
+    let raw = "From: a@b.com\nTo: c@d.com\n\nHello"
+    let (app, himalaya) = appWithRecordingHimalaya()
+    let output = try await SendMessageRequest().execute(
+        SendMessageRequest.Input(message: raw, dryRun: true), in: app
+    )
+    #expect(output.contains("dry_run: true"))
+    #expect(output.contains("\r\n\r\nHello"))
+    #expect(himalaya.calls.withLock { $0 }.isEmpty)
+}
+
+@Test
+func sendTemplateMultipartNoMMLTagsInOutput() async throws {
+    let mmlInput = "From: a@b.com\nTo: c@d.com\nSubject: test\n\n<#part type=text/plain>hello<#/part>"
+    let compiledMime = "From: a@b.com\r\nTo: c@d.com\r\nContent-Type: text/plain\r\n\r\nhello"
+    let (app, _) = appWithRecordingHimalaya(
+        mml: StubMML(available: true, compileResult: compiledMime)
+    )
+    let output = try await SendTemplateRequest().execute(
+        SendTemplateRequest.Input(template: mmlInput, confirm: true), in: app
+    )
+    // Regression test: no <# tags in the sent result
+    #expect(!output.contains("<#"))
+    #expect(output == "sent: true")
+}
+
+@Test
+func sendTemplateDryRunReturnsCompiledMime() async throws {
+    let compiledMime = "MIME-Version: 1.0\r\nFrom: a@b.com\r\n\r\nhello compiled"
+    let (app, himalaya) = appWithRecordingHimalaya(
+        mml: StubMML(available: true, compileResult: compiledMime)
+    )
+    let output = try await SendTemplateRequest().execute(
+        SendTemplateRequest.Input(template: "From: a@b.com\n\n<#part>hello<#/part>", dryRun: true), in: app
+    )
+    #expect(output.contains("dry_run: true"))
+    #expect(output.contains("strategy: mml_external"))
+    #expect(output.contains("hello compiled"))
+    #expect(himalaya.calls.withLock { $0 }.isEmpty)
+}
+
+@Test
+func sendTemplateFailsWithParseReportOnInvalidMML() async throws {
+    let (app, _) = appWithRecordingHimalaya(
+        mml: StubMML(available: true, compileResult: "", error: AppError.mmlCompilationFailed(stderr: "parse error at line 3"))
+    )
+    await #expect(throws: AppError.mmlCompilationFailed(stderr: "parse error at line 3")) {
+        try await SendTemplateRequest().execute(
+            SendTemplateRequest.Input(template: "From: a@b\n\ninvalid <#", confirm: true), in: app
+        )
+    }
+}
+
+@Test
+func sendTemplateFailsWhenMMLAbsentOnV2() async throws {
+    let (app, _) = appWithRecordingHimalaya(
+        mml: StubMML(available: false),
+        capabilities: Capabilities(
+            himalayaVersion: "2.0.0", himalayaFamily: .v2,
+            mmlPresent: false, mmlVersion: nil, templateStrategy: .unavailable
+        )
+    )
+    await #expect(throws: AppError.mmlNotFound) {
+        try await SendTemplateRequest().execute(
+            SendTemplateRequest.Input(template: "From: a@b\n\n<#part>x<#/part>", confirm: true), in: app
+        )
+    }
+}
+
+@Test
+func capabilitiesRequestReturnsDetectedValues() async throws {
+    let (app, _) = appWithRecordingHimalaya(
+        capabilities: Capabilities(
+            himalayaVersion: "v2.0.0", himalayaFamily: .v2,
+            mmlPresent: true, mmlVersion: "v1.1.1", templateStrategy: .mmlExternal
+        )
+    )
+    let output = try await CapabilitiesRequest().execute(CapabilitiesRequest.Input(), in: app)
+    #expect(output.contains("himalaya_version: v2.0.0"))
+    #expect(output.contains("himalaya_family: v2"))
+    #expect(output.contains("mml_present: true"))
+    #expect(output.contains("template_strategy: mml_external"))
+}
+
+@Test
+func normalizeCRLFConvertsLoneLFWithoutDoublingExisting() {
+    let input = "Header: val\r\n\r\nBody\nline2\r\nline3"
+    let result = normalizeCRLF(input)
+    #expect(result == "Header: val\r\n\r\nBody\r\nline2\r\nline3")
+    #expect(!result.contains("\r\r"))
 }
