@@ -343,7 +343,7 @@ extension ToolHandler {
     static let sendTemplate = ToolHandler(
         tool: Tool(
             name: "send_template",
-            description: "Send a himalaya template (headers + MML body) you author, inline or from a file. Requires confirm=true; irreversible.",
+            description: "Compile an MML template via `mml compile` then send. Use dry_run=true to preview the MIME without sending. Requires confirm=true to send.",
             inputSchema: .object([
                 "type": .string("object"),
                 "properties": .object([
@@ -363,6 +363,10 @@ extension ToolHandler {
                     "confirm": .object([
                         "type": .string("boolean"),
                         "description": .string("Must be true to actually send.")
+                    ]),
+                    "dry_run": .object([
+                        "type": .string("boolean"),
+                        "description": .string("If true, compile and return the MIME without sending.")
                     ]),
                     "account": accountProperty
                 ])
