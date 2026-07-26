@@ -9,3 +9,4 @@ DerivedData/
 
 # Local MCP server config (machine-specific absolute paths)
 .mcp.json
+boards.sqlite*
