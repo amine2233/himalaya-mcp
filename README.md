@@ -281,6 +281,14 @@ sequenceDiagram
 - macOS 15+ (required by `swift-configuration` 1.0)
 - The [`himalaya`](https://github.com/pimalaya/himalaya) CLI, installed and configured with at least
   one account — the server shells out to it (found via `PATH` or `$HIMALAYA_BIN_PATH`)
+- The [`mml`](https://github.com/pimalaya/mml) binary (**required on both v1 and v2**) — compiles MML
+  templates into MIME before sending. Without it, `send_template` will fail with an actionable error.
+  Install with:
+  ```bash
+  cargo install mime-meta-language --locked --features cli
+  ```
+  > The crate is named `mime-meta-language`, but the installed binary is `mml`.
+  > The `--features cli` flag is **mandatory** — without it only the library is built, no binary.
 - Optional: [`mise`](https://mise.jdx.dev) to run the build/install tasks below
 
 ## Installing the himalaya CLI
