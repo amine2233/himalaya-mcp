@@ -19,6 +19,8 @@ public enum AppError: Error, Equatable, Sendable {
     case mmlCompilationFailed(stderr: String)
     /// The raw message is missing the blank line separating headers from body.
     case missingHeaderBodySeparator
+    /// A subprocess exited with a non-zero status.
+    case commandFailed(exitCode: Int32, output: String)
 }
 
 extension AppError: CustomStringConvertible {
@@ -46,6 +48,8 @@ extension AppError: CustomStringConvertible {
             return "MML compilation failed: \(stderr)"
         case .missingHeaderBodySeparator:
             return "Invalid message: missing blank line between headers and body."
+        case let .commandFailed(exitCode, output):
+            return "Command failed (exit \(exitCode)): \(output)"
         }
     }
 }

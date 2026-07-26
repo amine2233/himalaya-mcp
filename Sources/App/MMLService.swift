@@ -57,7 +57,35 @@ public struct MMLServiceDefault: MMLService {
         guard let path = mmlPath else {
             throw AppError.mmlNotFound
         }
-        return try executable.run(executable: path, arguments: ["compile"], standardInput: input)
+        let sanitized = Self.stripInterTagWhitespace(input)
+        return try executable.run(executable: path, arguments: ["compile"], standardInput: sanitized)
+    }
+
+    // ponytail: splits headers from body, collapses whitespace between MML structural
+    // tags in the body only. Upgrade to a real MML pre-processor if edge cases appear.
+    static func stripInterTagWhitespace(_ input: String) -> String {
+        guard let separatorRange = input.range(of: "\n\n") else { return input }
+        let headers = input[...separatorRange.lowerBound]
+        let body = String(input[separatorRange.upperBound...])
+
+        // Collapse whitespace (including newlines) between structural MML tags:
+        // after <#multipart...>, before <#/multipart>, between <#/part> and <#part>
+        var collapsed = body
+        let structuralPatterns = [
+            ("(<#multipart[^>]*>)\\s+(<#)", "$1$2"),
+            ("(<#/part>)\\s+(<#)", "$1$2"),
+            ("(<#/part>)\\s+(<#/multipart>)", "$1$2"),
+        ]
+        for (pattern, replacement) in structuralPatterns {
+            if let regex = try? NSRegularExpression(pattern: pattern) {
+                collapsed = regex.stringByReplacingMatches(
+                    in: collapsed, range: NSRange(collapsed.startIndex..., in: collapsed),
+                    withTemplate: replacement
+                )
+            }
+        }
+
+        return headers + "\n" + collapsed
     }
 
     public func isAvailable() -> Bool { mmlPath != nil }

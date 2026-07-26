@@ -56,6 +56,12 @@ public struct ExecutableServiceDefault: ExecutableService {
         }
 
         let output = String(decoding: data, as: UTF8.self)
-        return output.trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if process.terminationStatus != 0 {
+            throw AppError.commandFailed(exitCode: process.terminationStatus, output: output)
+        }
+
+        return output
     }
 }
