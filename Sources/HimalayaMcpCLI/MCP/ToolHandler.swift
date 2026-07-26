@@ -34,8 +34,9 @@ extension ToolHandler {
         .listEmails, .searchEmails, .readEmail, .readEmailHtml,
         .listFolders, .createFolder, .deleteFolder,
         .flagEmail, .moveEmail,
-        .draftReply, .sendEmail, .sendTemplate,
+        .draftReply, .sendEmail, .sendTemplate, .sendMessage,
         .listAttachments, .downloadAttachment,
+        .capabilities,
         .deleteEmail
     ]
 
@@ -370,6 +371,53 @@ extension ToolHandler {
         call: { params, application in
             let input = try decodeArguments(SendTemplateRequest.Input.self, from: params.arguments)
             return try await SendTemplateRequest().execute(input, in: application)
+        }
+    )
+
+    // MARK: Raw message sending
+
+    static let sendMessage = ToolHandler(
+        tool: Tool(
+            name: "send_message",
+            description: "Send a raw RFC 5322 message (headers + body) verbatim via himalaya. No MML compilation. Requires confirm=true; irreversible.",
+            inputSchema: .object([
+                "type": .string("object"),
+                "properties": .object([
+                    "message": .object([
+                        "type": .string("string"),
+                        "description": .string(
+                            "Complete RFC 5322 message (headers, blank line, body). Sent verbatim."
+                        )
+                    ]),
+                    "account": accountProperty,
+                    "dry_run": .object([
+                        "type": .string("boolean"),
+                        "description": .string("If true, return the normalized MIME without sending.")
+                    ])
+                ]),
+                "required": .array([.string("message")])
+            ])
+        ),
+        call: { params, application in
+            let input = try decodeArguments(SendMessageRequest.Input.self, from: params.arguments)
+            return try await SendMessageRequest().execute(input, in: application)
+        }
+    )
+
+    // MARK: Capabilities
+
+    static let capabilities = ToolHandler(
+        tool: Tool(
+            name: "capabilities",
+            description: "Show detected himalaya/mml versions, family, and template strategy. Diagnostic tool.",
+            inputSchema: .object([
+                "type": .string("object"),
+                "properties": .object([:])
+            ])
+        ),
+        call: { params, application in
+            let input = try decodeArguments(CapabilitiesRequest.Input.self, from: params.arguments)
+            return try await CapabilitiesRequest().execute(input, in: application)
         }
     )
 
