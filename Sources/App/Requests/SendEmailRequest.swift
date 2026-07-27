@@ -23,6 +23,7 @@ public struct SendEmailRequest: Request {
         public let account: String?
         public let action: Action?
         public let draftFolder: String?
+        public let readReceipt: String?
 
         public init(
             to: String,
@@ -35,7 +36,8 @@ public struct SendEmailRequest: Request {
             attachments: [String]? = nil,
             account: String? = nil,
             action: Action? = nil,
-            draftFolder: String? = nil
+            draftFolder: String? = nil,
+            readReceipt: String? = nil
         ) {
             self.to = to
             self.subject = subject
@@ -48,12 +50,14 @@ public struct SendEmailRequest: Request {
             self.account = account
             self.action = action
             self.draftFolder = draftFolder
+            self.readReceipt = readReceipt
         }
 
         private enum CodingKeys: String, CodingKey {
             case to, subject, body, cc, bcc, from, attachments, account, action
             case bodyType = "body_type"
             case draftFolder = "draft_folder"
+            case readReceipt = "read_receipt"
         }
     }
 
@@ -69,7 +73,8 @@ public struct SendEmailRequest: Request {
             subject: input.subject,
             body: input.body,
             bodyType: input.bodyType ?? .plain,
-            attachments: input.attachments ?? []
+            attachments: input.attachments ?? [],
+            readReceipt: input.readReceipt
         ))
 
         switch input.action ?? .preview {

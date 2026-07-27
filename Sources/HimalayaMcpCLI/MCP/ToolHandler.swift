@@ -334,6 +334,10 @@ extension ToolHandler {
                         "type": .string("string"),
                         "description": .string("Mailbox for drafts. Defaults to Drafts.")
                     ]),
+                    "read_receipt": .object([
+                        "type": .string("string"),
+                        "description": .string("Email address for read receipt (Disposition-Notification-To). Most providers strip this header.")
+                    ]),
                     "account": accountProperty
                 ]),
                 "required": .array([.string("to"), .string("subject"), .string("body")])
