@@ -74,6 +74,7 @@ private func appWithRecordingHimalaya(
         templateStrategy: .mmlExternal
     )
     app.register(CapabilitiesKey.self) { _ in caps }
+    app.register(EmailComposerKey.self) { _ in EmailComposerDefault() }
     return (app, himalaya)
 }
 
@@ -123,6 +124,7 @@ private func appWithScriptedHimalaya(_ himalaya: ScriptedHimalaya) -> Applicatio
         himalayaVersion: "test", himalayaFamily: .v1, mmlPresent: true,
         mmlVersion: "1.1.1", templateStrategy: .mmlExternal
     ) }
+    app.register(EmailComposerKey.self) { _ in EmailComposerDefault() }
     return app
 }
 
@@ -282,81 +284,83 @@ func moveEmailInputDecodesTargetFolderSnakeCase() throws {
 }
 
 @Test
-func sendEmailPreviewComposesOnly() async throws {
-    let (app, himalaya) = appWithRecordingHimalaya(output: "COMPOSED")
-    // action omitted → preview.
+func sendEmailPreviewComposesInProcess() async throws {
+    let (app, himalaya) = appWithRecordingHimalaya()
     let output = try await SendEmailRequest().execute(
         SendEmailRequest.Input(to: "a@b.c", subject: "Hi", body: "Hello"), in: app
     )
-
-    #expect(output == "Draft (not saved/sent):\n\nCOMPOSED")
-    // Only the compose call ran (v1 `template write`); nothing saved/sent.
-    #expect(himalaya.calls.withLock { $0 } == [[
-        "template", "write", "--header", "To:a@b.c", "--header", "Subject:Hi", "Hello"
-    ]])
+    #expect(output.contains("Draft (not saved/sent):"))
+    #expect(output.contains("To: a@b.c"))
+    #expect(output.contains("Subject: Hi"))
+    #expect(output.contains("Hello"))
+    #expect(himalaya.calls.withLock { $0 }.isEmpty)
 }
 
 @Test
-func sendEmailComposeAppendsAttachmentMMLv1() async throws {
-    let (app, himalaya) = appWithRecordingHimalaya()
-    _ = try await SendEmailRequest().execute(
+func sendEmailPreviewHtmlWrapsInMMLPart() async throws {
+    let (app, _) = appWithRecordingHimalaya()
+    let output = try await SendEmailRequest().execute(
+        SendEmailRequest.Input(to: "a@b.c", subject: "Hi", body: "<b>Bold</b>", bodyType: .html), in: app
+    )
+    #expect(output.contains("<#part type=text/html><b>Bold</b><#/part>"))
+}
+
+@Test
+func sendEmailPreviewAppendsAttachments() async throws {
+    let (app, _) = appWithRecordingHimalaya()
+    let output = try await SendEmailRequest().execute(
         SendEmailRequest.Input(to: "a@b.c", subject: "Hi", body: "Hello", attachments: ["/tmp/report.pdf"]),
         in: app
     )
-    let body = try #require(himalaya.calls.withLock { $0 }.first?.last)
-    #expect(body.contains("Hello"))
-    #expect(body.contains(#"<#part filename="/tmp/report.pdf" disposition=attachment><#/part>"#))
+    #expect(output.contains("Hello"))
+    #expect(output.contains(#"<#part filename="/tmp/report.pdf" disposition=attachment><#/part>"#))
 }
 
 @Test
 func sendEmailDraftSavesToDrafts() async throws {
-    // Compose returns the composed message; save returns empty.
+    let compiledMime = "MIME-Version: 1.0\r\nTo: a@b.c\r\n\r\nHello"
     let (app, himalaya) = appWithRecordingHimalaya(
-        outputFor: { $0.first == "template" && $0.dropFirst().first == "write" ? "COMPOSED" : "" }
+        mml: StubMML(available: true, compileResult: compiledMime)
     )
     let output = try await SendEmailRequest().execute(
         SendEmailRequest.Input(to: "a@b.c", subject: "Hi", body: "Hello", account: "work", action: .draft),
         in: app
     )
-
     #expect(output == "Draft saved to Drafts.")
     let calls = himalaya.calls.withLock { $0 }
-    #expect(calls.count == 2)
-    #expect(calls[1] == ["template", "save", "--folder", "Drafts", "--account", "work"])
-    #expect(himalaya.stdins.withLock { $0 }.last == "COMPOSED") // composed message piped to save
+    #expect(calls.count == 1)
+    #expect(calls[0] == ["template", "save", "--folder", "Drafts", "--account", "work"])
+    #expect(himalaya.stdins.withLock { $0 }.first == compiledMime)
 }
 
 @Test
 func sendEmailDraftHonoursDraftFolder() async throws {
-    let (app, himalaya) = appWithRecordingHimalaya()
+    let compiledMime = "MIME-Version: 1.0\r\n\r\nHello"
+    let (app, himalaya) = appWithRecordingHimalaya(
+        mml: StubMML(available: true, compileResult: compiledMime)
+    )
     _ = try await SendEmailRequest().execute(
-        SendEmailRequest.Input(
-            to: "a@b.c",
-            subject: "Hi",
-            body: "Hello",
-            action: .draft,
-            draftFolder: "Labels/Drafts"
-        ),
+        SendEmailRequest.Input(to: "a@b.c", subject: "Hi", body: "Hello",
+                               action: .draft, draftFolder: "Labels/Drafts"),
         in: app
     )
     #expect(himalaya.calls.withLock { $0 }.last == ["template", "save", "--folder", "Labels/Drafts"])
 }
 
 @Test
-func sendEmailSendsWhenActionSend() async throws {
+func sendEmailSendsViaSendTemplate() async throws {
+    let compiledMime = "MIME-Version: 1.0\r\nTo: a@b.c\r\n\r\nHello"
     let (app, himalaya) = appWithRecordingHimalaya(
-        outputFor: { $0.first == "template" && $0.dropFirst().first == "write" ? "COMPOSED" : "" }
+        mml: StubMML(available: true, compileResult: compiledMime)
     )
     let output = try await SendEmailRequest().execute(
         SendEmailRequest.Input(to: "a@b.c", subject: "Hi", body: "Hello", account: "work", action: .send),
         in: app
     )
-
-    #expect(output == "Message sent.")
+    #expect(output == "sent: true")
     let calls = himalaya.calls.withLock { $0 }
-    #expect(calls.count == 2)
-    #expect(calls[1] == ["template", "send", "--account", "work"])
-    #expect(himalaya.stdins.withLock { $0 }.last == "COMPOSED") // composed message piped to send
+    #expect(calls.count == 1)
+    #expect(calls[0] == ["template", "send", "--account", "work"])
 }
 
 @Test
@@ -1153,6 +1157,50 @@ func capabilitiesRequestReturnsDetectedValues() async throws {
     #expect(output.contains("himalaya_family: v2"))
     #expect(output.contains("mml_present: true"))
     #expect(output.contains("template_strategy: mml_external"))
+}
+
+// MARK: - HIMA-16: EmailComposer
+
+@Test
+func composerPlainTextNoWrapping() {
+    let output = EmailComposerDefault().compose(EmailComposition(
+        to: "a@b.c", subject: "Hi", body: "Hello"
+    ))
+    #expect(output.contains("To: a@b.c"))
+    #expect(output.contains("Subject: Hi"))
+    #expect(!output.contains("<#part"))
+    #expect(!output.contains("Content-Type"))
+    #expect(output.contains("\n\nHello"))
+}
+
+@Test
+func composerHtmlWrapsInMMLPart() {
+    let output = EmailComposerDefault().compose(EmailComposition(
+        to: "a@b.c", subject: "Hi", body: "<b>Bold</b>", bodyType: .html
+    ))
+    #expect(output.contains("<#part type=text/html><b>Bold</b><#/part>"))
+    #expect(!output.contains("Content-Type"))
+}
+
+@Test
+func composerAttachmentsAppended() {
+    let output = EmailComposerDefault().compose(EmailComposition(
+        to: "a@b.c", subject: "Hi", body: "Hello", attachments: ["/tmp/a.pdf", "/tmp/b.txt"]
+    ))
+    #expect(output.contains(#"<#part filename="/tmp/a.pdf" disposition=attachment><#/part>"#))
+    #expect(output.contains(#"<#part filename="/tmp/b.txt" disposition=attachment><#/part>"#))
+}
+
+@Test
+func composerAllHeaders() {
+    let output = EmailComposerDefault().compose(EmailComposition(
+        from: "me@x.y", to: "a@b.c", cc: "c@d.e", bcc: "e@f.g",
+        subject: "Hi", body: "Hello"
+    ))
+    #expect(output.contains("From: me@x.y"))
+    #expect(output.contains("To: a@b.c"))
+    #expect(output.contains("Cc: c@d.e"))
+    #expect(output.contains("Bcc: e@f.g"))
 }
 
 // MARK: - HIMA-15: Content-Type extraction and reapplication

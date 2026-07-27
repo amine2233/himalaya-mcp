@@ -24,6 +24,7 @@ public func configure(_ app: Application) async {
     app.register(MMLServiceKey.self) { container in
         MMLServiceDefault(executable: container.make(ExecutableServiceKey.self))
     }
+    app.register(EmailComposerKey.self) { _ in EmailComposerDefault() }
 
     let mmlService = app.make(MMLServiceKey.self)
     let himalayaService = app.make(HimalayaServiceKey.self)

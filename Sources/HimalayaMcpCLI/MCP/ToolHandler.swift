@@ -301,7 +301,12 @@ extension ToolHandler {
                     ]),
                     "body": .object([
                         "type": .string("string"),
-                        "description": .string("Plain-text body.")
+                        "description": .string("Email body (plain text or HTML, see body_type).")
+                    ]),
+                    "body_type": .object([
+                        "type": .string("string"),
+                        "enum": .array([.string("plain"), .string("html")]),
+                        "description": .string("plain (default): plain text body. html: HTML body wrapped in MML <#part type=text/html>.")
                     ]),
                     "cc": .object([
                         "type": .string("string"),
