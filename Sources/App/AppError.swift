@@ -13,6 +13,14 @@ public enum AppError: Error, Equatable, Sendable {
     /// A himalaya command ran longer than the configured timeout and was
     /// terminated. `milliseconds` is the limit that was exceeded.
     case commandTimedOut(milliseconds: Int)
+    /// The `mml` binary is not installed. Required for `send_template`.
+    case mmlNotFound
+    /// MML compilation failed. `stderr` contains the full ariadne parse report.
+    case mmlCompilationFailed(stderr: String)
+    /// The raw message is missing the blank line separating headers from body.
+    case missingHeaderBodySeparator
+    /// A subprocess exited with a non-zero status.
+    case commandFailed(exitCode: Int32, output: String)
 }
 
 extension AppError: CustomStringConvertible {
@@ -30,6 +38,18 @@ extension AppError: CustomStringConvertible {
             return reason
         case let .commandTimedOut(milliseconds):
             return "himalaya command timed out after \(milliseconds) ms."
+        case .mmlNotFound:
+            return """
+            The mml binary is required for send_template but was not found. \
+            Install it with: cargo install mime-meta-language --locked --features cli \
+            (crate name is "mime-meta-language", binary is "mml", --features cli is mandatory).
+            """
+        case let .mmlCompilationFailed(stderr):
+            return "MML compilation failed: \(stderr)"
+        case .missingHeaderBodySeparator:
+            return "Invalid message: missing blank line between headers and body."
+        case let .commandFailed(exitCode, output):
+            return "Command failed (exit \(exitCode)): \(output)"
         }
     }
 }

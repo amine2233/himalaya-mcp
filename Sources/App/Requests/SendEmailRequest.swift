@@ -3,14 +3,9 @@ import CascadeKit
 /// Composes an email from structured fields and then, depending on `action`,
 /// returns it for review, saves it as a draft, or sends it.
 ///
-/// This unifies the former `compose_email` (preview) and `send_email` (send), and
-/// adds a real **draft** (saved to the Drafts mailbox). The message is always
-/// composed first (`composeMessage`), then:
-/// - `.preview` → return the composed message (nothing saved/sent);
-/// - `.draft`   → append it to the Drafts mailbox (`saveMessage`);
-/// - `.send`    → send it (`sendTemplate`), which is irreversible.
+/// Uses the `EmailComposer` to build an MML template, then compiles it via
+/// `mml compile` (through `SendTemplateRequest`) for the send path.
 public struct SendEmailRequest: Request {
-    /// What to do with the composed message.
     public enum Action: String, Sendable, Decodable {
         case preview
         case draft
@@ -21,23 +16,20 @@ public struct SendEmailRequest: Request {
         public let to: String
         public let subject: String
         public let body: String
+        public let bodyType: EmailBodyType?
         public let cc: String?
         public let bcc: String?
-        /// Sender address. On v1 himalaya auto-fills it; v2 needs it for draft/send.
         public let from: String?
-        /// Absolute paths of files to attach.
         public let attachments: [String]?
-        /// Account override. `nil` uses the configured default account.
         public let account: String?
-        /// `preview` (default), `draft`, or `send`.
         public let action: Action?
-        /// Mailbox to save drafts into. Defaults to `Drafts`.
         public let draftFolder: String?
 
         public init(
             to: String,
             subject: String,
             body: String,
+            bodyType: EmailBodyType? = nil,
             cc: String? = nil,
             bcc: String? = nil,
             from: String? = nil,
@@ -49,6 +41,7 @@ public struct SendEmailRequest: Request {
             self.to = to
             self.subject = subject
             self.body = body
+            self.bodyType = bodyType
             self.cc = cc
             self.bcc = bcc
             self.from = from
@@ -59,15 +52,8 @@ public struct SendEmailRequest: Request {
         }
 
         private enum CodingKeys: String, CodingKey {
-            case to
-            case subject
-            case body
-            case cc
-            case bcc
-            case from
-            case attachments
-            case account
-            case action
+            case to, subject, body, cc, bcc, from, attachments, account, action
+            case bodyType = "body_type"
             case draftFolder = "draft_folder"
         }
     }
@@ -75,34 +61,35 @@ public struct SendEmailRequest: Request {
     public init() {}
 
     public func execute(_ input: Input, in application: Application) async throws -> String {
-        let dialect = application.himalayaDialect
-        let composed = try application.runHimalaya(
-            dialect.composeMessage(
-                from: input.from,
-                to: input.to,
-                cc: input.cc,
-                bcc: input.bcc,
-                subject: input.subject,
-                body: input.body,
-                attachments: input.attachments ?? [],
-                account: input.account
-            )
-        )
+        let composer = application.emailComposer
+        let template = composer.compose(EmailComposition(
+            from: input.from,
+            to: input.to,
+            cc: input.cc,
+            bcc: input.bcc,
+            subject: input.subject,
+            body: input.body,
+            bodyType: input.bodyType ?? .plain,
+            attachments: input.attachments ?? []
+        ))
 
         switch input.action ?? .preview {
         case .preview:
-            return "Draft (not saved/sent):\n\n\(composed)"
+            return "Draft (not saved/sent):\n\n\(template)"
         case .draft:
             let folder = input.draftFolder ?? "Drafts"
+            let mml = application.make(MMLServiceKey.self)
+            let mime = try mml.compile(template)
+            let dialect = application.himalayaDialect
             let output = try application.runHimalaya(
-                dialect.saveMessage(composed, folder: folder, account: input.account)
+                dialect.saveMessage(mime, folder: folder, account: input.account)
             )
             return output.isEmpty ? "Draft saved to \(folder)." : output
         case .send:
-            let output = try application.runHimalaya(
-                dialect.sendTemplate(composed, account: input.account)
+            let sendInput = SendTemplateRequest.Input(
+                template: template, confirm: true, account: input.account
             )
-            return output.isEmpty ? "Message sent." : output
+            return try await SendTemplateRequest().execute(sendInput, in: application)
         }
     }
 }

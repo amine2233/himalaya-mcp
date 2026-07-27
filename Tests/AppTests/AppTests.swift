@@ -56,13 +56,46 @@ private final class RecordingHimalaya: HimalayaService {
 private func appWithRecordingHimalaya(
     output: String = "",
     outputFor: (@Sendable ([String]) -> String)? = nil,
-    dialect: any HimalayaDialect = HimalayaDialectV1()
+    dialect: any HimalayaDialect = HimalayaDialectV1(),
+    mml: (any MMLService)? = nil,
+    capabilities: Capabilities? = nil
 ) -> (Application, RecordingHimalaya) {
     let app = Application()
     let himalaya = RecordingHimalaya(output: output, outputFor: outputFor)
     app.register(HimalayaServiceKey.self) { _ in himalaya }
     app.register(HimalayaDialectKey.self) { _ in dialect }
+    let mmlService: any MMLService = mml ?? StubMML(available: true, compileResult: "COMPILED")
+    app.register(MMLServiceKey.self) { _ in mmlService }
+    let caps = capabilities ?? Capabilities(
+        himalayaVersion: "test",
+        himalayaFamily: .v1,
+        mmlPresent: true,
+        mmlVersion: "1.1.1",
+        templateStrategy: .mmlExternal
+    )
+    app.register(CapabilitiesKey.self) { _ in caps }
+    app.register(EmailComposerKey.self) { _ in EmailComposerDefault() }
     return (app, himalaya)
+}
+
+/// A stub MML service for tests.
+private struct StubMML: MMLService {
+    let available: Bool
+    let compileResult: String
+    let error: (any Error)?
+
+    init(available: Bool, compileResult: String = "", error: (any Error)? = nil) {
+        self.available = available
+        self.compileResult = compileResult
+        self.error = error
+    }
+
+    func compile(_ input: String) throws -> String {
+        if let error { throw error }
+        return compileResult
+    }
+    func isAvailable() -> Bool { available }
+    func version() -> String? { available ? "1.1.1" : nil }
 }
 
 /// A himalaya stub whose output depends on the arguments (for multi-call flows).
@@ -86,6 +119,12 @@ private func appWithScriptedHimalaya(_ himalaya: ScriptedHimalaya) -> Applicatio
     let app = Application()
     app.register(HimalayaServiceKey.self) { _ in himalaya }
     app.register(HimalayaDialectKey.self) { _ in HimalayaDialectV1() }
+    app.register(MMLServiceKey.self) { _ in StubMML(available: true, compileResult: "COMPILED") }
+    app.register(CapabilitiesKey.self) { _ in Capabilities(
+        himalayaVersion: "test", himalayaFamily: .v1, mmlPresent: true,
+        mmlVersion: "1.1.1", templateStrategy: .mmlExternal
+    ) }
+    app.register(EmailComposerKey.self) { _ in EmailComposerDefault() }
     return app
 }
 
@@ -245,81 +284,83 @@ func moveEmailInputDecodesTargetFolderSnakeCase() throws {
 }
 
 @Test
-func sendEmailPreviewComposesOnly() async throws {
-    let (app, himalaya) = appWithRecordingHimalaya(output: "COMPOSED")
-    // action omitted → preview.
+func sendEmailPreviewComposesInProcess() async throws {
+    let (app, himalaya) = appWithRecordingHimalaya()
     let output = try await SendEmailRequest().execute(
         SendEmailRequest.Input(to: "a@b.c", subject: "Hi", body: "Hello"), in: app
     )
-
-    #expect(output == "Draft (not saved/sent):\n\nCOMPOSED")
-    // Only the compose call ran (v1 `template write`); nothing saved/sent.
-    #expect(himalaya.calls.withLock { $0 } == [[
-        "template", "write", "--header", "To:a@b.c", "--header", "Subject:Hi", "Hello"
-    ]])
+    #expect(output.contains("Draft (not saved/sent):"))
+    #expect(output.contains("To: a@b.c"))
+    #expect(output.contains("Subject: Hi"))
+    #expect(output.contains("Hello"))
+    #expect(himalaya.calls.withLock { $0 }.isEmpty)
 }
 
 @Test
-func sendEmailComposeAppendsAttachmentMMLv1() async throws {
-    let (app, himalaya) = appWithRecordingHimalaya()
-    _ = try await SendEmailRequest().execute(
+func sendEmailPreviewHtmlWrapsInMMLPart() async throws {
+    let (app, _) = appWithRecordingHimalaya()
+    let output = try await SendEmailRequest().execute(
+        SendEmailRequest.Input(to: "a@b.c", subject: "Hi", body: "<b>Bold</b>", bodyType: .html), in: app
+    )
+    #expect(output.contains("<#part type=text/html><b>Bold</b><#/part>"))
+}
+
+@Test
+func sendEmailPreviewAppendsAttachments() async throws {
+    let (app, _) = appWithRecordingHimalaya()
+    let output = try await SendEmailRequest().execute(
         SendEmailRequest.Input(to: "a@b.c", subject: "Hi", body: "Hello", attachments: ["/tmp/report.pdf"]),
         in: app
     )
-    let body = try #require(himalaya.calls.withLock { $0 }.first?.last)
-    #expect(body.contains("Hello"))
-    #expect(body.contains(#"<#part filename="/tmp/report.pdf" disposition=attachment><#/part>"#))
+    #expect(output.contains("Hello"))
+    #expect(output.contains(#"<#part filename="/tmp/report.pdf" disposition=attachment><#/part>"#))
 }
 
 @Test
 func sendEmailDraftSavesToDrafts() async throws {
-    // Compose returns the composed message; save returns empty.
+    let compiledMime = "MIME-Version: 1.0\r\nTo: a@b.c\r\n\r\nHello"
     let (app, himalaya) = appWithRecordingHimalaya(
-        outputFor: { $0.first == "template" && $0.dropFirst().first == "write" ? "COMPOSED" : "" }
+        mml: StubMML(available: true, compileResult: compiledMime)
     )
     let output = try await SendEmailRequest().execute(
         SendEmailRequest.Input(to: "a@b.c", subject: "Hi", body: "Hello", account: "work", action: .draft),
         in: app
     )
-
     #expect(output == "Draft saved to Drafts.")
     let calls = himalaya.calls.withLock { $0 }
-    #expect(calls.count == 2)
-    #expect(calls[1] == ["template", "save", "--folder", "Drafts", "--account", "work"])
-    #expect(himalaya.stdins.withLock { $0 }.last == "COMPOSED") // composed message piped to save
+    #expect(calls.count == 1)
+    #expect(calls[0] == ["template", "save", "--folder", "Drafts", "--account", "work"])
+    #expect(himalaya.stdins.withLock { $0 }.first == compiledMime)
 }
 
 @Test
 func sendEmailDraftHonoursDraftFolder() async throws {
-    let (app, himalaya) = appWithRecordingHimalaya()
+    let compiledMime = "MIME-Version: 1.0\r\n\r\nHello"
+    let (app, himalaya) = appWithRecordingHimalaya(
+        mml: StubMML(available: true, compileResult: compiledMime)
+    )
     _ = try await SendEmailRequest().execute(
-        SendEmailRequest.Input(
-            to: "a@b.c",
-            subject: "Hi",
-            body: "Hello",
-            action: .draft,
-            draftFolder: "Labels/Drafts"
-        ),
+        SendEmailRequest.Input(to: "a@b.c", subject: "Hi", body: "Hello",
+                               action: .draft, draftFolder: "Labels/Drafts"),
         in: app
     )
     #expect(himalaya.calls.withLock { $0 }.last == ["template", "save", "--folder", "Labels/Drafts"])
 }
 
 @Test
-func sendEmailSendsWhenActionSend() async throws {
+func sendEmailSendsViaSendTemplate() async throws {
+    let compiledMime = "MIME-Version: 1.0\r\nTo: a@b.c\r\n\r\nHello"
     let (app, himalaya) = appWithRecordingHimalaya(
-        outputFor: { $0.first == "template" && $0.dropFirst().first == "write" ? "COMPOSED" : "" }
+        mml: StubMML(available: true, compileResult: compiledMime)
     )
     let output = try await SendEmailRequest().execute(
         SendEmailRequest.Input(to: "a@b.c", subject: "Hi", body: "Hello", account: "work", action: .send),
         in: app
     )
-
-    #expect(output == "Message sent.")
+    #expect(output == "sent: true")
     let calls = himalaya.calls.withLock { $0 }
-    #expect(calls.count == 2)
-    #expect(calls[1] == ["template", "send", "--account", "work"])
-    #expect(himalaya.stdins.withLock { $0 }.last == "COMPOSED") // composed message piped to send
+    #expect(calls.count == 1)
+    #expect(calls[0] == ["template", "send", "--account", "work"])
 }
 
 @Test
@@ -343,18 +384,24 @@ func draftReplyOmitsAllFlagWhenNotRequested() async throws {
 
 @Test
 func sendTemplateSendsInlineTemplateWhenConfirmed() async throws {
-    let (app, himalaya) = appWithRecordingHimalaya()
+    let compiledMime = "From: a@b.c\r\nMIME-Version: 1.0\r\n\r\nHi"
+    let (app, himalaya) = appWithRecordingHimalaya(
+        mml: StubMML(available: true, compileResult: compiledMime)
+    )
     let input = SendTemplateRequest.Input(template: "From: a@b.c\n\nHi", confirm: true)
     let output = try await SendTemplateRequest().execute(input, in: app)
 
-    #expect(output == "Template sent.")
+    #expect(output == "sent: true")
     #expect(himalaya.calls.withLock { $0 } == [["template", "send"]])
-    #expect(himalaya.stdins.withLock { $0 } == ["From: a@b.c\n\nHi"])
+    #expect(himalaya.stdins.withLock { $0 } == [compiledMime])
 }
 
 @Test
 func sendTemplateRefusesWithoutConfirmation() async throws {
-    let (app, himalaya) = appWithRecordingHimalaya()
+    let compiledMime = "MIME-Version: 1.0\r\n\r\nx"
+    let (app, himalaya) = appWithRecordingHimalaya(
+        mml: StubMML(available: true, compileResult: compiledMime)
+    )
     let output = try await SendTemplateRequest().execute(
         SendTemplateRequest.Input(template: "x", confirm: false), in: app
     )
@@ -371,12 +418,15 @@ func sendTemplateReadsFromFile() async throws {
     let file = dir.appendingPathComponent("draft.eml")
     try Data("From: a@b.c\n\nFrom a file".utf8).write(to: file)
 
-    let (app, himalaya) = appWithRecordingHimalaya()
+    let compiledMime = "From: a@b.c\r\n\r\nFrom a file compiled"
+    let (app, himalaya) = appWithRecordingHimalaya(
+        mml: StubMML(available: true, compileResult: compiledMime)
+    )
     _ = try await SendTemplateRequest().execute(
         SendTemplateRequest.Input(templateFile: file.path, confirm: true), in: app
     )
     #expect(himalaya.calls.withLock { $0 } == [["template", "send"]])
-    #expect(himalaya.stdins.withLock { $0 } == ["From: a@b.c\n\nFrom a file"])
+    #expect(himalaya.stdins.withLock { $0 } == [compiledMime])
 }
 
 @Test
@@ -998,4 +1048,217 @@ func singletonIsCachedAndTransientIsRebuilt() {
 
     #expect(singletonBuilds.withLock { $0 } == 1) // built once, then cached
     #expect(transientBuilds.withLock { $0 } == 2) // rebuilt each time
+}
+
+// MARK: - Acceptance tests (§11)
+
+@Test
+func sendMessageTextPlainSentVerbatim() async throws {
+    let raw = "From: a@b.com\r\nTo: c@d.com\r\nSubject: test\r\n\r\nHello plain"
+    let (app, himalaya) = appWithRecordingHimalaya()
+    let output = try await SendMessageRequest().execute(
+        SendMessageRequest.Input(message: raw, account: "work"), in: app
+    )
+    #expect(output == "sent: true")
+    #expect(himalaya.stdins.withLock { $0 } == [raw])
+}
+
+@Test
+func sendMessageValidatesHeaderBodySeparator() async throws {
+    let noSeparator = "From: a@b.com\r\nTo: c@d.com\r\nno blank line here"
+    let (app, _) = appWithRecordingHimalaya()
+    await #expect(throws: AppError.missingHeaderBodySeparator) {
+        try await SendMessageRequest().execute(
+            SendMessageRequest.Input(message: noSeparator), in: app
+        )
+    }
+}
+
+@Test
+func sendMessageDryRunReturnsNormalizedMimeWithoutSending() async throws {
+    let raw = "From: a@b.com\nTo: c@d.com\n\nHello"
+    let (app, himalaya) = appWithRecordingHimalaya()
+    let output = try await SendMessageRequest().execute(
+        SendMessageRequest.Input(message: raw, dryRun: true), in: app
+    )
+    #expect(output.contains("dry_run: true"))
+    #expect(output.contains("\r\n\r\nHello"))
+    #expect(himalaya.calls.withLock { $0 }.isEmpty)
+}
+
+@Test
+func sendTemplateMultipartNoMMLTagsInOutput() async throws {
+    let mmlInput = "From: a@b.com\nTo: c@d.com\nSubject: test\n\n<#part type=text/plain>hello<#/part>"
+    let compiledMime = "From: a@b.com\r\nTo: c@d.com\r\nContent-Type: text/plain\r\n\r\nhello"
+    let (app, _) = appWithRecordingHimalaya(
+        mml: StubMML(available: true, compileResult: compiledMime)
+    )
+    let output = try await SendTemplateRequest().execute(
+        SendTemplateRequest.Input(template: mmlInput, confirm: true), in: app
+    )
+    // Regression test: no <# tags in the sent result
+    #expect(!output.contains("<#"))
+    #expect(output == "sent: true")
+}
+
+@Test
+func sendTemplateDryRunReturnsCompiledMime() async throws {
+    let compiledMime = "MIME-Version: 1.0\r\nFrom: a@b.com\r\n\r\nhello compiled"
+    let (app, himalaya) = appWithRecordingHimalaya(
+        mml: StubMML(available: true, compileResult: compiledMime)
+    )
+    let output = try await SendTemplateRequest().execute(
+        SendTemplateRequest.Input(template: "From: a@b.com\n\n<#part>hello<#/part>", dryRun: true), in: app
+    )
+    #expect(output.contains("dry_run: true"))
+    #expect(output.contains("strategy: mml_external"))
+    #expect(output.contains("hello compiled"))
+    #expect(himalaya.calls.withLock { $0 }.isEmpty)
+}
+
+@Test
+func sendTemplateFailsWithParseReportOnInvalidMML() async throws {
+    let (app, _) = appWithRecordingHimalaya(
+        mml: StubMML(available: true, compileResult: "", error: AppError.mmlCompilationFailed(stderr: "parse error at line 3"))
+    )
+    await #expect(throws: AppError.mmlCompilationFailed(stderr: "parse error at line 3")) {
+        try await SendTemplateRequest().execute(
+            SendTemplateRequest.Input(template: "From: a@b\n\ninvalid <#", confirm: true), in: app
+        )
+    }
+}
+
+@Test
+func sendTemplateFailsWhenMMLAbsentOnV2() async throws {
+    let (app, _) = appWithRecordingHimalaya(
+        mml: StubMML(available: false),
+        capabilities: Capabilities(
+            himalayaVersion: "2.0.0", himalayaFamily: .v2,
+            mmlPresent: false, mmlVersion: nil, templateStrategy: .unavailable
+        )
+    )
+    await #expect(throws: AppError.mmlNotFound) {
+        try await SendTemplateRequest().execute(
+            SendTemplateRequest.Input(template: "From: a@b\n\n<#part>x<#/part>", confirm: true), in: app
+        )
+    }
+}
+
+@Test
+func capabilitiesRequestReturnsDetectedValues() async throws {
+    let (app, _) = appWithRecordingHimalaya(
+        capabilities: Capabilities(
+            himalayaVersion: "v2.0.0", himalayaFamily: .v2,
+            mmlPresent: true, mmlVersion: "v1.1.1", templateStrategy: .mmlExternal
+        )
+    )
+    let output = try await CapabilitiesRequest().execute(CapabilitiesRequest.Input(), in: app)
+    #expect(output.contains("himalaya_version: v2.0.0"))
+    #expect(output.contains("himalaya_family: v2"))
+    #expect(output.contains("mml_present: true"))
+    #expect(output.contains("template_strategy: mml_external"))
+}
+
+// MARK: - HIMA-16: EmailComposer
+
+@Test
+func composerPlainTextNoWrapping() {
+    let output = EmailComposerDefault().compose(EmailComposition(
+        to: "a@b.c", subject: "Hi", body: "Hello"
+    ))
+    #expect(output.contains("To: a@b.c"))
+    #expect(output.contains("Subject: Hi"))
+    #expect(!output.contains("<#part"))
+    #expect(!output.contains("Content-Type"))
+    #expect(output.contains("\n\nHello"))
+}
+
+@Test
+func composerHtmlWrapsInMMLPart() {
+    let output = EmailComposerDefault().compose(EmailComposition(
+        to: "a@b.c", subject: "Hi", body: "<b>Bold</b>", bodyType: .html
+    ))
+    #expect(output.contains("<#part type=text/html><b>Bold</b><#/part>"))
+    #expect(!output.contains("Content-Type"))
+}
+
+@Test
+func composerAttachmentsAppended() {
+    let output = EmailComposerDefault().compose(EmailComposition(
+        to: "a@b.c", subject: "Hi", body: "Hello", attachments: ["/tmp/a.pdf", "/tmp/b.txt"]
+    ))
+    #expect(output.contains(#"<#part filename="/tmp/a.pdf" disposition=attachment><#/part>"#))
+    #expect(output.contains(#"<#part filename="/tmp/b.txt" disposition=attachment><#/part>"#))
+}
+
+@Test
+func composerAllHeaders() {
+    let output = EmailComposerDefault().compose(EmailComposition(
+        from: "me@x.y", to: "a@b.c", cc: "c@d.e", bcc: "e@f.g",
+        subject: "Hi", body: "Hello"
+    ))
+    #expect(output.contains("From: me@x.y"))
+    #expect(output.contains("To: a@b.c"))
+    #expect(output.contains("Cc: c@d.e"))
+    #expect(output.contains("Bcc: e@f.g"))
+}
+
+// MARK: - HIMA-15: Content-Type extraction and reapplication
+
+@Test
+func extractContentTypeStripsAndReturnsIt() {
+    let input = "From: a@b\nContent-Type: text/html; charset=utf-8\nSubject: test\n\n<p>Hi</p>"
+    let (stripped, ct) = MMLServiceDefault.extractContentType(input)
+    #expect(ct == "text/html; charset=utf-8")
+    #expect(!stripped.contains("Content-Type"))
+    #expect(stripped.contains("From: a@b"))
+    #expect(stripped.contains("<p>Hi</p>"))
+}
+
+@Test
+func extractContentTypeReturnsNilWhenAbsent() {
+    let input = "From: a@b\nSubject: test\n\n<p>Hi</p>"
+    let (stripped, ct) = MMLServiceDefault.extractContentType(input)
+    #expect(ct == nil)
+    #expect(stripped == input)
+}
+
+@Test
+func reapplyContentTypeSinglePart() {
+    let compiled = ["MIME-Version: 1.0", "From: <a@b>",
+                    "Content-Type: text/plain; charset=\"utf-8\"",
+                    "Content-Transfer-Encoding: 7bit", "", "<p>Test</p>"].joined(separator: "\r\n")
+    let result = MMLServiceDefault.reapplyContentType(compiled, userContentType: "text/html; charset=utf-8")
+    let contentTypes = splitLines(result).filter { $0.lowercased().hasPrefix("content-type:") }
+    #expect(contentTypes.count == 1)
+    #expect(contentTypes.first?.contains("text/html") == true)
+}
+
+@Test
+func reapplyContentTypeMultipart() {
+    let compiled = ["MIME-Version: 1.0",
+                    "Content-Type: multipart/mixed; boundary=\"abc\"",
+                    "", "--abc",
+                    "Content-Type: text/plain; charset=\"utf-8\"",
+                    "", "body", "--abc--"].joined(separator: "\r\n")
+    let result = MMLServiceDefault.reapplyContentType(compiled, userContentType: "text/html; charset=utf-8")
+    let contentTypes = splitLines(result).filter { $0.lowercased().hasPrefix("content-type:") }
+    #expect(contentTypes.count == 2)
+    #expect(contentTypes[0].contains("multipart/mixed"))
+    #expect(contentTypes[1].contains("text/html"))
+}
+
+/// Cross-platform line splitter that handles \r\n and \n uniformly.
+private func splitLines(_ input: String) -> [String] {
+    input.replacingOccurrences(of: "\r\n", with: "\n")
+        .split(separator: "\n", omittingEmptySubsequences: false)
+        .map(String.init)
+}
+
+@Test
+func normalizeCRLFConvertsLoneLFWithoutDoublingExisting() {
+    let input = "Header: val\r\n\r\nBody\nline2\r\nline3"
+    let result = normalizeCRLF(input)
+    #expect(result == "Header: val\r\n\r\nBody\r\nline2\r\nline3")
+    #expect(!result.contains("\r\r"))
 }

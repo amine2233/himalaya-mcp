@@ -93,4 +93,9 @@ extension Container {
         try make(HimalayaServiceKey.self)
             .run(arguments: invocation.arguments, standardInput: invocation.standardInput)
     }
+
+    /// The email composer for building MML templates from structured input.
+    public var emailComposer: any EmailComposer {
+        make(EmailComposerKey.self)
+    }
 }
