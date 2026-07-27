@@ -1229,9 +1229,7 @@ func reapplyContentTypeSinglePart() {
                     "Content-Type: text/plain; charset=\"utf-8\"",
                     "Content-Transfer-Encoding: 7bit", "", "<p>Test</p>"].joined(separator: "\r\n")
     let result = MMLServiceDefault.reapplyContentType(compiled, userContentType: "text/html; charset=utf-8")
-    let contentTypes = result.components(separatedBy: "\n")
-        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-        .filter { $0.lowercased().hasPrefix("content-type:") }
+    let contentTypes = splitLines(result).filter { $0.lowercased().hasPrefix("content-type:") }
     #expect(contentTypes.count == 1)
     #expect(contentTypes.first?.contains("text/html") == true)
 }
@@ -1244,12 +1242,17 @@ func reapplyContentTypeMultipart() {
                     "Content-Type: text/plain; charset=\"utf-8\"",
                     "", "body", "--abc--"].joined(separator: "\r\n")
     let result = MMLServiceDefault.reapplyContentType(compiled, userContentType: "text/html; charset=utf-8")
-    let contentTypes = result.components(separatedBy: "\n")
-        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-        .filter { $0.lowercased().hasPrefix("content-type:") }
+    let contentTypes = splitLines(result).filter { $0.lowercased().hasPrefix("content-type:") }
     #expect(contentTypes.count == 2)
     #expect(contentTypes[0].contains("multipart/mixed"))
     #expect(contentTypes[1].contains("text/html"))
+}
+
+/// Cross-platform line splitter that handles \r\n and \n uniformly.
+private func splitLines(_ input: String) -> [String] {
+    input.replacingOccurrences(of: "\r\n", with: "\n")
+        .split(separator: "\n", omittingEmptySubsequences: false)
+        .map(String.init)
 }
 
 @Test

@@ -86,11 +86,11 @@ public struct MMLServiceDefault: MMLService {
     }
 
     static func reapplyContentType(_ compiled: String, userContentType: String) -> String {
-        // ponytail: for single-part, replace the root Content-Type. For multipart,
-        // skip the root (multipart/mixed) and replace the first body part's Content-Type.
-        // Swift treats \r\n as a single Character, so split on \r\n explicitly.
-        let separator = compiled.contains("\r\n") ? "\r\n" : "\n"
-        let lines = compiled.components(separatedBy: separator)
+        // ponytail: normalize to \n for splitting (Swift treats \r\n as one Character),
+        // rejoin with original separator.
+        let hasCRLF = compiled.contains("\r\n")
+        let normalized = hasCRLF ? compiled.replacingOccurrences(of: "\r\n", with: "\n") : compiled
+        let lines = normalized.split(separator: "\n", omittingEmptySubsequences: false)
         var result: [String] = []
         var replaced = false
         var isMultipart = false
@@ -99,7 +99,7 @@ public struct MMLServiceDefault: MMLService {
             let lower = line.lowercased()
             if !replaced && lower.hasPrefix("content-type:") && lower.contains("multipart/") {
                 isMultipart = true
-                result.append(line)
+                result.append(String(line))
                 continue
             }
             if isMultipart && line.hasPrefix("--") {
@@ -112,9 +112,9 @@ public struct MMLServiceDefault: MMLService {
                     continue
                 }
             }
-            result.append(line)
+            result.append(String(line))
         }
-        return result.joined(separator: separator)
+        return result.joined(separator: hasCRLF ? "\r\n" : "\n")
     }
 
     // ponytail: splits headers from body, collapses whitespace between MML structural
