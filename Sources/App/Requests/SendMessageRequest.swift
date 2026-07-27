@@ -1,4 +1,3 @@
-import CascadeKit
 
 /// Sends a raw RFC 5322 message verbatim (no MML compilation).
 ///

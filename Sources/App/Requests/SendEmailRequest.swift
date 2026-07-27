@@ -1,4 +1,3 @@
-import CascadeKit
 
 /// Composes an email from structured fields and then, depending on `action`,
 /// returns it for review, saves it as a draft, or sends it.

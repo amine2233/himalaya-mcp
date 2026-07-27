@@ -1,4 +1,3 @@
-import CascadeKit
 
 /// Generates a reply template via `himalaya message reply <id>`.
 ///

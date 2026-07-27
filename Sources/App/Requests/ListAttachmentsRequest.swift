@@ -1,4 +1,3 @@
-import CascadeKit
 import Foundation
 
 /// Lists a message's attachments.

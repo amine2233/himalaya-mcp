@@ -1,5 +1,4 @@
 import AppConfiguration
-import CascadeKit
 
 /// One-stop dependency configuration, à la Vapor's `configure.swift`.
 ///

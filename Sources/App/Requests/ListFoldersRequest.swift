@@ -1,4 +1,3 @@
-import CascadeKit
 
 /// Lists all folders via `himalaya folder list`.
 public struct ListFoldersRequest: Request {

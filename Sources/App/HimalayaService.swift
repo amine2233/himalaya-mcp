@@ -1,4 +1,3 @@
-import CascadeKit
 
 /// The single entry point for driving the [himalaya](https://github.com/pimalaya/himalaya)
 /// CLI. Every himalaya invocation in the app funnels through `run(arguments:)`,

@@ -1,4 +1,3 @@
-import CascadeKit
 
 /// Deletes one or more messages via `himalaya message delete <id…>`.
 ///

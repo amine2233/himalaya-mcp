@@ -1,4 +1,3 @@
-import CascadeKit
 
 /// Content type for the email body.
 public enum EmailBodyType: String, Sendable, Decodable {

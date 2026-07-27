@@ -1,4 +1,3 @@
-import CascadeKit
 
 /// Reads the plain-text, human-friendly body of a message via
 /// `himalaya message read <id> --no-headers`.

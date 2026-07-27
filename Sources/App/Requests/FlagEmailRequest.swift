@@ -1,4 +1,3 @@
-import CascadeKit
 
 /// Adds or removes flags on a message via `himalaya flag add|remove <id> <flags…>`.
 public struct FlagEmailRequest: Request {
