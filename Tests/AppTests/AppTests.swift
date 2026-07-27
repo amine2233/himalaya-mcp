@@ -51,8 +51,30 @@ private final class RecordingHimalaya: HimalayaService {
     }
 }
 
-/// Builds a container wired with a recording himalaya service (and a v1 dialect),
-/// and returns both.
+/// One place to wire all test services. Update here when a new ServiceKey is added.
+private struct TestApp {
+    static let defaultCaps = Capabilities(
+        himalayaVersion: "test", himalayaFamily: .v1,
+        mmlPresent: true, mmlVersion: "1.1.1", templateStrategy: .mmlExternal
+    )
+
+    static func build(
+        himalaya: any HimalayaService,
+        dialect: any HimalayaDialect = HimalayaDialectV1(),
+        mml: (any MMLService)? = nil,
+        capabilities: Capabilities? = nil
+    ) -> Application {
+        let app = Application()
+        app.register(HimalayaServiceKey.self) { _ in himalaya }
+        app.register(HimalayaDialectKey.self) { _ in dialect }
+        app.register(MMLServiceKey.self) { _ in mml ?? StubMML(available: true, compileResult: "COMPILED") }
+        app.register(CapabilitiesKey.self) { _ in capabilities ?? defaultCaps }
+        app.register(EmailComposerKey.self) { _ in EmailComposerDefault() }
+        return app
+    }
+}
+
+/// Builds a container wired with a recording himalaya service and returns both.
 private func appWithRecordingHimalaya(
     output: String = "",
     outputFor: (@Sendable ([String]) -> String)? = nil,
@@ -60,21 +82,8 @@ private func appWithRecordingHimalaya(
     mml: (any MMLService)? = nil,
     capabilities: Capabilities? = nil
 ) -> (Application, RecordingHimalaya) {
-    let app = Application()
     let himalaya = RecordingHimalaya(output: output, outputFor: outputFor)
-    app.register(HimalayaServiceKey.self) { _ in himalaya }
-    app.register(HimalayaDialectKey.self) { _ in dialect }
-    let mmlService: any MMLService = mml ?? StubMML(available: true, compileResult: "COMPILED")
-    app.register(MMLServiceKey.self) { _ in mmlService }
-    let caps = capabilities ?? Capabilities(
-        himalayaVersion: "test",
-        himalayaFamily: .v1,
-        mmlPresent: true,
-        mmlVersion: "1.1.1",
-        templateStrategy: .mmlExternal
-    )
-    app.register(CapabilitiesKey.self) { _ in caps }
-    app.register(EmailComposerKey.self) { _ in EmailComposerDefault() }
+    let app = TestApp.build(himalaya: himalaya, dialect: dialect, mml: mml, capabilities: capabilities)
     return (app, himalaya)
 }
 
@@ -116,16 +125,7 @@ private struct ScriptedHimalaya: HimalayaService {
 }
 
 private func appWithScriptedHimalaya(_ himalaya: ScriptedHimalaya) -> Application {
-    let app = Application()
-    app.register(HimalayaServiceKey.self) { _ in himalaya }
-    app.register(HimalayaDialectKey.self) { _ in HimalayaDialectV1() }
-    app.register(MMLServiceKey.self) { _ in StubMML(available: true, compileResult: "COMPILED") }
-    app.register(CapabilitiesKey.self) { _ in Capabilities(
-        himalayaVersion: "test", himalayaFamily: .v1, mmlPresent: true,
-        mmlVersion: "1.1.1", templateStrategy: .mmlExternal
-    ) }
-    app.register(EmailComposerKey.self) { _ in EmailComposerDefault() }
-    return app
+    TestApp.build(himalaya: himalaya)
 }
 
 @Test

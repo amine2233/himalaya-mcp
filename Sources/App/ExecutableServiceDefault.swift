@@ -18,17 +18,14 @@ public struct ExecutableServiceDefault: ExecutableService {
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         process.arguments = [executable] + arguments
 
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
+        let stdoutPipe = Pipe()
+        let stderrPipe = Pipe()
+        process.standardOutput = stdoutPipe
+        process.standardError = stderrPipe
 
-        // Always give the child its own stdin pipe so it never reads the parent's
-        // stdin (in `serve` mode that's the JSON-RPC stream). We feed the given
-        // input, if any, then close to signal EOF.
         let inputPipe = Pipe()
         process.standardInput = inputPipe
 
-        // Signalled when the process exits (naturally or after termination).
         let exited = DispatchSemaphore(value: 0)
         process.terminationHandler = { _ in exited.signal() }
 
@@ -43,25 +40,28 @@ public struct ExecutableServiceDefault: ExecutableService {
             if exited.wait(timeout: .now() + .milliseconds(timeoutMilliseconds)) == .timedOut {
                 timedOut = true
                 process.terminate()
-                exited.wait() // wait for the terminated process to actually finish
+                exited.wait()
             }
         } else {
             exited.wait()
         }
 
-        // The process has ended, so its write end is closed: this reads to EOF.
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        let stdoutData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
+        let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
         if timedOut {
             throw AppError.commandTimedOut(milliseconds: timeoutMilliseconds)
         }
 
-        let output = String(decoding: data, as: UTF8.self)
+        let stdout = String(decoding: stdoutData, as: UTF8.self)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let stderr = String(decoding: stderrData, as: UTF8.self)
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
         if process.terminationStatus != 0 {
-            throw AppError.commandFailed(exitCode: process.terminationStatus, output: output)
+            let detail = stderr.isEmpty ? stdout : stderr
+            throw AppError.commandFailed(exitCode: process.terminationStatus, output: detail)
         }
 
-        return output
+        return stdout
     }
 }

@@ -57,11 +57,27 @@ public struct MMLServiceDefault: MMLService {
         guard let path = mmlPath else {
             throw AppError.mmlNotFound
         }
-        let sanitized = Self.stripInterTagWhitespace(input)
-        let (stripped, userContentType) = Self.extractContentType(sanitized)
-        let compiled = try executable.run(executable: path, arguments: ["compile"], standardInput: stripped)
-        guard let userContentType else { return compiled }
-        return Self.reapplyContentType(compiled, userContentType: userContentType)
+        let preprocessed = Self.preprocess(input)
+        let compiled = try executable.run(executable: path, arguments: ["compile"], standardInput: preprocessed.template)
+        return Self.postprocess(compiled, context: preprocessed.context)
+    }
+
+    /// State carried from preprocess to postprocess.
+    struct CompileContext {
+        let userContentType: String?
+    }
+
+    /// All transforms applied before `mml compile`.
+    static func preprocess(_ input: String) -> (template: String, context: CompileContext) {
+        let sanitized = stripInterTagWhitespace(input)
+        let (stripped, ct) = extractContentType(sanitized)
+        return (stripped, CompileContext(userContentType: ct))
+    }
+
+    /// All transforms applied after `mml compile`.
+    static func postprocess(_ compiled: String, context: CompileContext) -> String {
+        guard let ct = context.userContentType else { return compiled }
+        return reapplyContentType(compiled, userContentType: ct)
     }
 
     // ponytail: strip Content-Type before mml compile (it truncates the subtype and
