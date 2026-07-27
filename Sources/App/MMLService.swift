@@ -58,7 +58,63 @@ public struct MMLServiceDefault: MMLService {
             throw AppError.mmlNotFound
         }
         let sanitized = Self.stripInterTagWhitespace(input)
-        return try executable.run(executable: path, arguments: ["compile"], standardInput: sanitized)
+        let (stripped, userContentType) = Self.extractContentType(sanitized)
+        let compiled = try executable.run(executable: path, arguments: ["compile"], standardInput: stripped)
+        guard let userContentType else { return compiled }
+        return Self.reapplyContentType(compiled, userContentType: userContentType)
+    }
+
+    // ponytail: strip Content-Type before mml compile (it truncates the subtype and
+    // duplicates it), reapply after. Upgrade: file upstream fix on pimalaya/mml.
+    static func extractContentType(_ input: String) -> (stripped: String, contentType: String?) {
+        guard let sepRange = input.range(of: "\n\n") else { return (input, nil) }
+        let headerBlock = String(input[...sepRange.lowerBound])
+        let body = String(input[sepRange.upperBound...])
+
+        let lines = headerBlock.split(separator: "\n", omittingEmptySubsequences: false)
+        var contentType: String?
+        var filtered: [Substring] = []
+        for line in lines {
+            if line.lowercased().hasPrefix("content-type:") {
+                contentType = String(line.dropFirst("Content-Type:".count)).trimmingCharacters(in: .whitespaces)
+            } else {
+                filtered.append(line)
+            }
+        }
+        guard let contentType else { return (input, nil) }
+        return (filtered.joined(separator: "\n") + "\n" + body, contentType)
+    }
+
+    static func reapplyContentType(_ compiled: String, userContentType: String) -> String {
+        // ponytail: for single-part, replace the root Content-Type. For multipart,
+        // skip the root (multipart/mixed) and replace the first body part's Content-Type.
+        // Swift treats \r\n as a single Character, so split on \r\n explicitly.
+        let separator = compiled.contains("\r\n") ? "\r\n" : "\n"
+        let lines = compiled.components(separatedBy: separator)
+        var result: [String] = []
+        var replaced = false
+        var isMultipart = false
+        var pastFirstBoundary = false
+        for line in lines {
+            let lower = line.lowercased()
+            if !replaced && lower.hasPrefix("content-type:") && lower.contains("multipart/") {
+                isMultipart = true
+                result.append(line)
+                continue
+            }
+            if isMultipart && line.hasPrefix("--") {
+                pastFirstBoundary = true
+            }
+            if !replaced && lower.hasPrefix("content-type:") {
+                if !isMultipart || pastFirstBoundary {
+                    result.append("Content-Type: \(userContentType)")
+                    replaced = true
+                    continue
+                }
+            }
+            result.append(line)
+        }
+        return result.joined(separator: separator)
     }
 
     // ponytail: splits headers from body, collapses whitespace between MML structural

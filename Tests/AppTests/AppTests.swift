@@ -1155,6 +1155,55 @@ func capabilitiesRequestReturnsDetectedValues() async throws {
     #expect(output.contains("template_strategy: mml_external"))
 }
 
+// MARK: - HIMA-15: Content-Type extraction and reapplication
+
+@Test
+func extractContentTypeStripsAndReturnsIt() {
+    let input = "From: a@b\nContent-Type: text/html; charset=utf-8\nSubject: test\n\n<p>Hi</p>"
+    let (stripped, ct) = MMLServiceDefault.extractContentType(input)
+    #expect(ct == "text/html; charset=utf-8")
+    #expect(!stripped.contains("Content-Type"))
+    #expect(stripped.contains("From: a@b"))
+    #expect(stripped.contains("<p>Hi</p>"))
+}
+
+@Test
+func extractContentTypeReturnsNilWhenAbsent() {
+    let input = "From: a@b\nSubject: test\n\n<p>Hi</p>"
+    let (stripped, ct) = MMLServiceDefault.extractContentType(input)
+    #expect(ct == nil)
+    #expect(stripped == input)
+}
+
+@Test
+func reapplyContentTypeSinglePart() {
+    let compiled = ["MIME-Version: 1.0", "From: <a@b>",
+                    "Content-Type: text/plain; charset=\"utf-8\"",
+                    "Content-Transfer-Encoding: 7bit", "", "<p>Test</p>"].joined(separator: "\r\n")
+    let result = MMLServiceDefault.reapplyContentType(compiled, userContentType: "text/html; charset=utf-8")
+    let contentTypes = result.components(separatedBy: "\n")
+        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        .filter { $0.lowercased().hasPrefix("content-type:") }
+    #expect(contentTypes.count == 1)
+    #expect(contentTypes.first?.contains("text/html") == true)
+}
+
+@Test
+func reapplyContentTypeMultipart() {
+    let compiled = ["MIME-Version: 1.0",
+                    "Content-Type: multipart/mixed; boundary=\"abc\"",
+                    "", "--abc",
+                    "Content-Type: text/plain; charset=\"utf-8\"",
+                    "", "body", "--abc--"].joined(separator: "\r\n")
+    let result = MMLServiceDefault.reapplyContentType(compiled, userContentType: "text/html; charset=utf-8")
+    let contentTypes = result.components(separatedBy: "\n")
+        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        .filter { $0.lowercased().hasPrefix("content-type:") }
+    #expect(contentTypes.count == 2)
+    #expect(contentTypes[0].contains("multipart/mixed"))
+    #expect(contentTypes[1].contains("text/html"))
+}
+
 @Test
 func normalizeCRLFConvertsLoneLFWithoutDoublingExisting() {
     let input = "Header: val\r\n\r\nBody\nline2\r\nline3"
