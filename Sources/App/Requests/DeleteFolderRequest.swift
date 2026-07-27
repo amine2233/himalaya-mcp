@@ -1,4 +1,3 @@
-import CascadeKit
 
 /// Deletes a folder via `himalaya folder delete <name>`.
 public struct DeleteFolderRequest: Request {

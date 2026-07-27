@@ -1,4 +1,3 @@
-import CascadeKit
 
 /// Moves a message to another folder via `himalaya message move <target> <id>`.
 public struct MoveEmailRequest: Request {

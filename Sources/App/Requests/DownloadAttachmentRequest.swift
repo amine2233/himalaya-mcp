@@ -1,4 +1,3 @@
-import CascadeKit
 import Foundation
 
 /// Downloads a single named attachment from a message.

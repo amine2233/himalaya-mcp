@@ -1,4 +1,3 @@
-import CascadeKit
 import Foundation
 
 /// Reads the HTML body of a message.

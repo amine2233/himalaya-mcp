@@ -1,4 +1,3 @@
-import CascadeKit
 
 /// Searches envelopes via `himalaya envelope list <query>`.
 ///

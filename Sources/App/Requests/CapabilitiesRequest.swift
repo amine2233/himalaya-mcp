@@ -1,4 +1,3 @@
-import CascadeKit
 
 /// Returns the detected capabilities: himalaya version/family, mml presence,
 /// and the template strategy. Diagnostic tool for debugging.

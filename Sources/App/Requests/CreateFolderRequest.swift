@@ -1,4 +1,3 @@
-import CascadeKit
 
 /// Creates a folder via `himalaya folder add <name>`.
 public struct CreateFolderRequest: Request {

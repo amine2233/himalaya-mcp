@@ -1,4 +1,4 @@
-import CascadeKit
+@_exported import CascadeKit
 
 /// A single runnable command.
 ///

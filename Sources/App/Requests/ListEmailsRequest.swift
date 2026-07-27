@@ -1,4 +1,3 @@
-import CascadeKit
 
 /// Lists envelopes in a folder via `himalaya envelope list`.
 public struct ListEmailsRequest: Request {
