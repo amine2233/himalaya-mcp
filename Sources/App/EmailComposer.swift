@@ -15,6 +15,8 @@ public struct EmailComposition: Sendable {
     public let body: String
     public let bodyType: EmailBodyType
     public let attachments: [String]
+    /// Email address for read receipt (Disposition-Notification-To, RFC 8098).
+    public let readReceipt: String?
 
     public init(
         from: String? = nil,
@@ -24,7 +26,8 @@ public struct EmailComposition: Sendable {
         subject: String,
         body: String,
         bodyType: EmailBodyType = .plain,
-        attachments: [String] = []
+        attachments: [String] = [],
+        readReceipt: String? = nil
     ) {
         self.from = from
         self.to = to
@@ -34,6 +37,7 @@ public struct EmailComposition: Sendable {
         self.body = body
         self.bodyType = bodyType
         self.attachments = attachments
+        self.readReceipt = readReceipt
     }
 }
 
@@ -58,6 +62,7 @@ public struct EmailComposerDefault: EmailComposer {
         if let cc = input.cc { headers.append("Cc: \(cc)") }
         if let bcc = input.bcc { headers.append("Bcc: \(bcc)") }
         headers.append("Subject: \(input.subject)")
+        if let addr = input.readReceipt { headers.append("Disposition-Notification-To: \(addr)") }
 
         let body: String
         switch input.bodyType {
