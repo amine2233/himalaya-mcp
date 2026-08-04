@@ -59,5 +59,6 @@ func validateHeaderBodySeparator(_ message: String) throws {
 func parseMessageId(_ output: String) -> String? {
     let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmed.isEmpty else { return nil }
+
     return trimmed
 }

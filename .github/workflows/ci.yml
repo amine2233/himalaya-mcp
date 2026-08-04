@@ -1,6 +1,3 @@
-# CI for himalaya-mcp — delegates to the shared reusable workflow in
-# amine2233/ci-shared, which installs mise and runs the `lint` / `test` tasks
-# from this repo's mise.toml.
 name: CI
 
 on:
@@ -11,14 +8,14 @@ on:
 
 jobs:
   ci:
-    uses: amine2233/ci-shared/.github/workflows/ci.yml@1.0.2
+    permissions:
+      contents: read
+      pull-requests: write
+    uses: amine2233/ci-shared/.github/workflows/ci.yml@1.1
     with:
-      # swift-configuration 1.0 uses Foundation's `Data.bytes` (RawSpan), which
-      # only exists in the 2025 SDKs — needs the macOS 26 / Xcode 26 image.
       macos-runner: "macos-26"
-      # Swift is provisioned via mise ([tools] in mise.toml), so the ubuntu
-      # runner builds and tests too.
       enable-macos: true
       enable-linux: true
-      enable-lint: false
+      enable-lint: true
       enable-coverage: false
+      enable-title-check: true

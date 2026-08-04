@@ -10,7 +10,7 @@
 # runners ship no Swift) as well as macOS.
 swift = "6.3.3"
 # executor-cli powers the CI lint/format/coverage tasks (provisioned by mise in CI).
-"github:executor-cli/executor" = "0.27.1"
+"github:executor-cli/executor" = "0.28.2"
 
 [env]
 # Per-user install prefix — the best-practice location for user binaries
@@ -44,9 +44,32 @@ run = "executor linting code ./Sources --reporter console"
 description = "Lint code documentation (executor)"
 run = "executor linting documentation ./Sources --reporter console"
 
+[tasks.check_merge_request_title]
+description = "Lint the pull request title and post the result as a PR comment."
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+# ponytail: executor expects CI_MERGE_REQUEST_TITLE (GitLab-style), simulate it from GitHub API
+export CI_MERGE_REQUEST_TITLE=$(gh pr view "${COMMENT_TARGET?}" --json title -q .title)
+executor check-ci merge-request-title --post-comment --comment-token "${GITHUB_TOKEN?}" --comment-target "${COMMENT_TARGET?}"
+'''
+
 [tasks.lint]
 description = "Run all static checks (code + documentation) — used by CI's lint job"
-depends = ["check_code", "check_documentation"]
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+# ponytail: executor format has no --lint flag, so format then diff the diff
+before=$(git diff)
+executor format .
+if [[ "$before" != "$(git diff)" ]]; then
+    git diff
+    echo "❌ formatting changed files — commit the result of 'mise format'" >&2
+    exit 1
+fi
+executor linting code ./Sources --reporter console
+executor linting documentation ./Sources --reporter console
+'''
 
 [tasks.test-coverage]
 description = "Run tests with coverage (macOS only; used by CI when coverage is enabled)"

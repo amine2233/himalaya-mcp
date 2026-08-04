@@ -52,7 +52,7 @@ private final class RecordingHimalaya: HimalayaService {
 }
 
 /// One place to wire all test services. Update here when a new ServiceKey is added.
-private struct TestApp {
+private enum TestApp {
     static let defaultCaps = Capabilities(
         himalayaVersion: "test", himalayaFamily: .v1,
         mmlPresent: true, mmlVersion: "1.1.1", templateStrategy: .mmlExternal
@@ -103,8 +103,14 @@ private struct StubMML: MMLService {
         if let error { throw error }
         return compileResult
     }
-    func isAvailable() -> Bool { available }
-    func version() -> String? { available ? "1.1.1" : nil }
+
+    func isAvailable() -> Bool {
+        available
+    }
+
+    func version() -> String? {
+        available ? "1.1.1" : nil
+    }
 }
 
 /// A himalaya stub whose output depends on the arguments (for multi-call flows).
@@ -340,8 +346,13 @@ func sendEmailDraftHonoursDraftFolder() async throws {
         mml: StubMML(available: true, compileResult: compiledMime)
     )
     _ = try await SendEmailRequest().execute(
-        SendEmailRequest.Input(to: "a@b.c", subject: "Hi", body: "Hello",
-                               action: .draft, draftFolder: "Labels/Drafts"),
+        SendEmailRequest.Input(
+            to: "a@b.c",
+            subject: "Hi",
+            body: "Hello",
+            action: .draft,
+            draftFolder: "Labels/Drafts"
+        ),
         in: app
     )
     #expect(himalaya.calls.withLock { $0 }.last == ["template", "save", "--folder", "Labels/Drafts"])
@@ -1119,7 +1130,11 @@ func sendTemplateDryRunReturnsCompiledMime() async throws {
 @Test
 func sendTemplateFailsWithParseReportOnInvalidMML() async throws {
     let (app, _) = appWithRecordingHimalaya(
-        mml: StubMML(available: true, compileResult: "", error: AppError.mmlCompilationFailed(stderr: "parse error at line 3"))
+        mml: StubMML(
+            available: true,
+            compileResult: "",
+            error: AppError.mmlCompilationFailed(stderr: "parse error at line 3")
+        )
     )
     await #expect(throws: AppError.mmlCompilationFailed(stderr: "parse error at line 3")) {
         try await SendTemplateRequest().execute(
@@ -1225,9 +1240,14 @@ func extractContentTypeReturnsNilWhenAbsent() {
 
 @Test
 func reapplyContentTypeSinglePart() {
-    let compiled = ["MIME-Version: 1.0", "From: <a@b>",
-                    "Content-Type: text/plain; charset=\"utf-8\"",
-                    "Content-Transfer-Encoding: 7bit", "", "<p>Test</p>"].joined(separator: "\r\n")
+    let compiled = [
+        "MIME-Version: 1.0",
+        "From: <a@b>",
+        "Content-Type: text/plain; charset=\"utf-8\"",
+        "Content-Transfer-Encoding: 7bit",
+        "",
+        "<p>Test</p>"
+    ].joined(separator: "\r\n")
     let result = MMLServiceDefault.reapplyContentType(compiled, userContentType: "text/html; charset=utf-8")
     let contentTypes = splitLines(result).filter { $0.lowercased().hasPrefix("content-type:") }
     #expect(contentTypes.count == 1)
@@ -1236,11 +1256,16 @@ func reapplyContentTypeSinglePart() {
 
 @Test
 func reapplyContentTypeMultipart() {
-    let compiled = ["MIME-Version: 1.0",
-                    "Content-Type: multipart/mixed; boundary=\"abc\"",
-                    "", "--abc",
-                    "Content-Type: text/plain; charset=\"utf-8\"",
-                    "", "body", "--abc--"].joined(separator: "\r\n")
+    let compiled = [
+        "MIME-Version: 1.0",
+        "Content-Type: multipart/mixed; boundary=\"abc\"",
+        "",
+        "--abc",
+        "Content-Type: text/plain; charset=\"utf-8\"",
+        "",
+        "body",
+        "--abc--"
+    ].joined(separator: "\r\n")
     let result = MMLServiceDefault.reapplyContentType(compiled, userContentType: "text/html; charset=utf-8")
     let contentTypes = splitLines(result).filter { $0.lowercased().hasPrefix("content-type:") }
     #expect(contentTypes.count == 2)

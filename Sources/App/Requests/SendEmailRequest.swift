@@ -54,7 +54,15 @@ public struct SendEmailRequest: Request {
         }
 
         private enum CodingKeys: String, CodingKey {
-            case to, subject, body, cc, bcc, from, attachments, account, action
+            case to
+            case subject
+            case body
+            case cc
+            case bcc
+            case from
+            case attachments
+            case account
+            case action
             case bodyType = "body_type"
             case draftFolder = "draft_folder"
             case readReceipt = "read_receipt"

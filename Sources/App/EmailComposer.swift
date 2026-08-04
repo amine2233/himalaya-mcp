@@ -64,12 +64,11 @@ public struct EmailComposerDefault: EmailComposer {
         headers.append("Subject: \(input.subject)")
         if let addr = input.readReceipt { headers.append("Disposition-Notification-To: \(addr)") }
 
-        let body: String
-        switch input.bodyType {
+        let body: String = switch input.bodyType {
         case .plain:
-            body = input.body
+            input.body
         case .html:
-            body = "<#part type=text/html>\(input.body)<#/part>"
+            "<#part type=text/html>\(input.body)<#/part>"
         }
 
         let withAttachments = MMLAttachment.appended(to: body, paths: input.attachments)

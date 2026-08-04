@@ -84,6 +84,7 @@ public struct SendTemplateRequest: Request {
             guard input.confirm == true else {
                 return "Refusing to send: set confirm=true to actually send the template."
             }
+
             let template = MMLAttachment.appended(to: source, paths: input.attachments ?? [])
             let output = try application.runHimalaya(
                 application.himalayaDialect.sendTemplate(template, account: input.account)

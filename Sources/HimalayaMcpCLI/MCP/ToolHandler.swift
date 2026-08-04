@@ -306,7 +306,9 @@ extension ToolHandler {
                     "body_type": .object([
                         "type": .string("string"),
                         "enum": .array([.string("plain"), .string("html")]),
-                        "description": .string("plain (default): plain text body. html: HTML body wrapped in MML <#part type=text/html>.")
+                        "description": .string(
+                            "plain (default): plain text body. html: HTML body wrapped in MML <#part type=text/html>."
+                        )
                     ]),
                     "cc": .object([
                         "type": .string("string"),
@@ -336,7 +338,9 @@ extension ToolHandler {
                     ]),
                     "read_receipt": .object([
                         "type": .string("string"),
-                        "description": .string("Email address for read receipt (Disposition-Notification-To). Most providers strip this header.")
+                        "description": .string(
+                            "Email address for read receipt (Disposition-Notification-To). Most providers strip this header."
+                        )
                     ]),
                     "account": accountProperty
                 ]),

@@ -48,7 +48,10 @@ public struct MMLServiceDefault: MMLService {
     private let executable: any ExecutableService
     private let mmlPath: String?
 
-    public init(executable: any ExecutableService, environment: [String: String] = ProcessInfo.processInfo.environment) {
+    public init(
+        executable: any ExecutableService,
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) {
         self.executable = executable
         self.mmlPath = Self.findMML(environment: environment)
     }
@@ -57,8 +60,13 @@ public struct MMLServiceDefault: MMLService {
         guard let path = mmlPath else {
             throw AppError.mmlNotFound
         }
+
         let preprocessed = Self.preprocess(input)
-        let compiled = try executable.run(executable: path, arguments: ["compile"], standardInput: preprocessed.template)
+        let compiled = try executable.run(
+            executable: path,
+            arguments: ["compile"],
+            standardInput: preprocessed.template
+        )
         return Self.postprocess(compiled, context: preprocessed.context)
     }
 
@@ -77,6 +85,7 @@ public struct MMLServiceDefault: MMLService {
     /// All transforms applied after `mml compile`.
     static func postprocess(_ compiled: String, context: CompileContext) -> String {
         guard let ct = context.userContentType else { return compiled }
+
         return reapplyContentType(compiled, userContentType: ct)
     }
 
@@ -84,6 +93,7 @@ public struct MMLServiceDefault: MMLService {
     // duplicates it), reapply after. Upgrade: file upstream fix on pimalaya/mml.
     static func extractContentType(_ input: String) -> (stripped: String, contentType: String?) {
         guard let sepRange = input.range(of: "\n\n") else { return (input, nil) }
+
         let headerBlock = String(input[...sepRange.lowerBound])
         let body = String(input[sepRange.upperBound...])
 
@@ -92,12 +102,14 @@ public struct MMLServiceDefault: MMLService {
         var filtered: [Substring] = []
         for line in lines {
             if line.lowercased().hasPrefix("content-type:") {
-                contentType = String(line.dropFirst("Content-Type:".count)).trimmingCharacters(in: .whitespaces)
+                contentType = String(line.dropFirst("Content-Type:".count))
+                    .trimmingCharacters(in: .whitespaces)
             } else {
                 filtered.append(line)
             }
         }
         guard let contentType else { return (input, nil) }
+
         return (filtered.joined(separator: "\n") + "\n" + body, contentType)
     }
 
@@ -113,15 +125,15 @@ public struct MMLServiceDefault: MMLService {
         var pastFirstBoundary = false
         for line in lines {
             let lower = line.lowercased()
-            if !replaced && lower.hasPrefix("content-type:") && lower.contains("multipart/") {
+            if !replaced, lower.hasPrefix("content-type:"), lower.contains("multipart/") {
                 isMultipart = true
                 result.append(String(line))
                 continue
             }
-            if isMultipart && line.hasPrefix("--") {
+            if isMultipart, line.hasPrefix("--") {
                 pastFirstBoundary = true
             }
-            if !replaced && lower.hasPrefix("content-type:") {
+            if !replaced, lower.hasPrefix("content-type:") {
                 if !isMultipart || pastFirstBoundary {
                     result.append("Content-Type: \(userContentType)")
                     replaced = true
@@ -137,6 +149,7 @@ public struct MMLServiceDefault: MMLService {
     // tags in the body only. Upgrade to a real MML pre-processor if edge cases appear.
     static func stripInterTagWhitespace(_ input: String) -> String {
         guard let separatorRange = input.range(of: "\n\n") else { return input }
+
         let headers = input[...separatorRange.lowerBound]
         let body = String(input[separatorRange.upperBound...])
 
@@ -146,7 +159,7 @@ public struct MMLServiceDefault: MMLService {
         let structuralPatterns = [
             ("(<#multipart[^>]*>)\\s+(<#)", "$1$2"),
             ("(<#/part>)\\s+(<#)", "$1$2"),
-            ("(<#/part>)\\s+(<#/multipart>)", "$1$2"),
+            ("(<#/part>)\\s+(<#/multipart>)", "$1$2")
         ]
         for (pattern, replacement) in structuralPatterns {
             if let regex = try? NSRegularExpression(pattern: pattern) {
@@ -160,10 +173,13 @@ public struct MMLServiceDefault: MMLService {
         return headers + "\n" + collapsed
     }
 
-    public func isAvailable() -> Bool { mmlPath != nil }
+    public func isAvailable() -> Bool {
+        mmlPath != nil
+    }
 
     public func version() -> String? {
         guard let path = mmlPath else { return nil }
+
         return try? executable.run(executable: path, arguments: ["--version"])
     }
 
