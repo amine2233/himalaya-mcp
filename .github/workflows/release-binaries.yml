@@ -1,0 +1,17 @@
+name: Release Binaries
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  release-binaries:
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    uses: amine2233/ci-shared/.github/workflows/release-binaries.yml@1.1
+    with:
+      binary-name: himalaya-mcp
+      targets: '[{"runner":"macos-26","target":"darwin-amd64","args":"--arch x86_64"},{"runner":"macos-26","target":"darwin-arm64"},{"runner":"ubuntu-latest","target":"linux-x86_64"},{"runner":"ubuntu-latest","target":"linux-arm64"}]'
+    secrets: inherit
