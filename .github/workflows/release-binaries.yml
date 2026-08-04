@@ -1,8 +1,12 @@
 name: Release Binaries
 
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Preview the release without publishing (no tag, no commit, no GitHub Release)."
+        type: boolean
+        default: true
 
 jobs:
   release-binaries:
@@ -13,5 +17,6 @@ jobs:
     uses: amine2233/ci-shared/.github/workflows/release-binaries.yml@1.1
     with:
       binary-name: himalaya-mcp
+      release-args: ${{ inputs.dry_run && '--dry-run --write-change-log' || '--write-change-log' }}
       targets: '[{"runner":"macos-26","target":"darwin-amd64","args":"--arch x86_64"},{"runner":"macos-26","target":"darwin-arm64"},{"runner":"ubuntu-latest","target":"linux-x86_64"},{"runner":"ubuntu-latest","target":"linux-arm64"}]'
     secrets: inherit
