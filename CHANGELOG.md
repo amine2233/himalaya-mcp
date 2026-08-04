@@ -1,3 +1,12 @@
+# [1.1.0](https://github.com/amine2233/himalaya-mcp/compare/1.0.0...1.1.0) (2026-08-04)
+
+
+## Features
+
+
+* add version sub command (#10) ([551c9b2](https://github.com/amine2233/himalaya-mcp/commit/551c9b27494fddceb247ab6ebf14c4ba1dac2a8f))
+
+
 # 1.0.0 (2026-08-04)
 
 
