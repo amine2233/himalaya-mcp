@@ -46,7 +46,13 @@ run = "executor linting documentation ./Sources --reporter console"
 
 [tasks.check_merge_request_title]
 description = "Lint the pull request title and post the result as a PR comment."
-run = 'executor check-ci merge-request-title --post-comment --comment-token "${GITHUB_TOKEN?}" --comment-target "${COMMENT_TARGET?}"'
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+# ponytail: executor expects CI_MERGE_REQUEST_TITLE (GitLab-style), simulate it from GitHub API
+export CI_MERGE_REQUEST_TITLE=$(gh pr view "${COMMENT_TARGET?}" --json title -q .title)
+executor check-ci merge-request-title --post-comment --comment-token "${GITHUB_TOKEN?}" --comment-target "${COMMENT_TARGET?}"
+'''
 
 [tasks.lint]
 description = "Run all static checks (code + documentation) — used by CI's lint job"
