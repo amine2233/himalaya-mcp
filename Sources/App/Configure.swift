@@ -49,13 +49,12 @@ private func buildCapabilities(
     let mmlPresent = mmlService.isAvailable()
     let mmlVersion = mmlService.version()
 
-    let strategy: TemplateStrategy
-    if mmlPresent {
-        strategy = .mmlExternal
+    let strategy: TemplateStrategy = if mmlPresent {
+        .mmlExternal
     } else if family == .v1 {
-        strategy = .himalayaBuiltin
+        .himalayaBuiltin
     } else {
-        strategy = .unavailable
+        .unavailable
     }
 
     return Capabilities(

@@ -13,7 +13,7 @@ public struct CapabilitiesRequest: Request {
         var lines = [
             "himalaya_version: \(caps.himalayaVersion)",
             "himalaya_family: \(caps.himalayaFamily.rawValue)",
-            "mml_present: \(caps.mmlPresent)",
+            "mml_present: \(caps.mmlPresent)"
         ]
         if let v = caps.mmlVersion { lines.append("mml_version: \(v)") }
         lines.append("template_strategy: \(caps.templateStrategy.rawValue)")
