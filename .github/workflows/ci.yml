@@ -20,5 +20,5 @@ jobs:
       # runner builds and tests too.
       enable-macos: true
       enable-linux: true
-      enable-lint: false
+      enable-lint: true
       enable-coverage: false
