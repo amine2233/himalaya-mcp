@@ -23,6 +23,8 @@ curVer=$1
 nextVer=$2
 relType=$3
 
+versionFile="Sources/HimalayaMcpCLI/Commands/VersionCommand.swift"
+
 if [[ "$curVer" ]]; then
   log_info "Bump version from \\e[33;1m${curVer}\\e[0m to \\e[33;1m${nextVer}\\e[0m (release type: $relType)..."
 
@@ -30,5 +32,9 @@ if [[ "$curVer" ]]; then
   sed -e "s/from: *\"$curVer\"/from: \"$nextVer\"/" README.md > README.md.next
   mv -f README.md.next README.md
 else
-  log_info "Bump version to \\e[33;1m${nextVer}\\e[0m (release type: $relType): this is the first release (skip)..."
+  log_info "Bump version to \\e[33;1m${nextVer}\\e[0m (release type: $relType): this is the first release (skip README)..."
 fi
+
+# replace in the CLI version file (also on the first release)
+sed -e "s/^let appVersion = \".*\"/let appVersion = \"$nextVer\"/" "$versionFile" > "$versionFile.next"
+mv -f "$versionFile.next" "$versionFile"

@@ -17,11 +17,12 @@ struct HimalayaMcpCLI: AsyncParsableCommand {
         CommandConfiguration(
             commandName: "himalaya-mcp",
             abstract: "A himalaya helper usable both as a CLI and as an MCP server.",
-            version: "0.1.0",
+            version: appVersion,
             subcommands: [
                 ServeCommand.self,
                 SetupCommand.self,
-                DoctorCommand.self
+                DoctorCommand.self,
+                VersionCommand.self
             ],
             defaultSubcommand: ServeCommand.self
         )
