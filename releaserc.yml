@@ -6,5 +6,6 @@ content:
   git_glob_patterns:
     - "README.md"
     - "CHANGELOG.md"
+    - "Sources/HimalayaMcpCLI/Commands/VersionCommand.swift"
   scripts:
     - './bumpversion.sh "${lastRelease.version}" "${nextRelease.version}" "${nextRelease.type}"'
