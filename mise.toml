@@ -46,7 +46,7 @@ run = "executor linting documentation ./Sources --reporter console"
 
 [tasks.check_merge_request_title]
 description = "Lint the pull request title and post the result as a PR comment."
-run = 'executor merge-request-title --post-comment --comment-token "${GITHUB_TOKEN?}" --comment-target "${COMMENT_TARGET?}"'
+run = 'executor check-ci merge-request-title --post-comment --comment-token "${GITHUB_TOKEN?}" --comment-target "${COMMENT_TARGET?}"'
 
 [tasks.lint]
 description = "Run all static checks (code + documentation) — used by CI's lint job"
