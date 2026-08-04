@@ -11,7 +11,7 @@ on:
 
 jobs:
   ci:
-    uses: amine2233/ci-shared/.github/workflows/ci.yml@1.0.2
+    uses: amine2233/ci-shared/.github/workflows/ci.yml@1.1
     with:
       # swift-configuration 1.0 uses Foundation's `Data.bytes` (RawSpan), which
       # only exists in the 2025 SDKs — needs the macOS 26 / Xcode 26 image.
@@ -22,3 +22,4 @@ jobs:
       enable-linux: true
       enable-lint: true
       enable-coverage: false
+      enable-title-check: true
