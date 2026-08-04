@@ -377,6 +377,9 @@ swift run HimalayaMcpCLI --help   # or run in place from the source tree
 Besides `serve`, the CLI ships management commands:
 
 ```bash
+himalaya-mcp version                 # print the release version (same as --version)
+himalaya-mcp --version               # ArgumentParser's built-in flag
+
 himalaya-mcp doctor                  # check himalaya + all accounts are reachable
 himalaya-mcp doctor --account work   # check only one account
 himalaya-mcp doctor --json           # machine-readable report (exit code non-zero on problems)
