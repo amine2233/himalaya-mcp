@@ -38,3 +38,9 @@ fi
 # replace in the CLI version file (also on the first release)
 sed -e "s/^let appVersion = \".*\"/let appVersion = \"$nextVer\"/" "$versionFile" > "$versionFile.next"
 mv -f "$versionFile.next" "$versionFile"
+
+# replace in the Homebrew formula (sha256 sums are filled in by CI once the
+# release tarballs exist — see .github/workflows/release-binaries.yml)
+formulaFile="Formula/himalaya-mcp.rb"
+sed -e "s/^  version \".*\"/  version \"$nextVer\"/" "$formulaFile" > "$formulaFile.next"
+mv -f "$formulaFile.next" "$formulaFile"

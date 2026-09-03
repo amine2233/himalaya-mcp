@@ -34,7 +34,9 @@ flag "--arch <arch>" help="Target architecture, e.g. arm64 or x86_64 (empty = ho
 run = '''
 #!/usr/bin/env bash
 set -euo pipefail
-swift build -c release --disable-sandbox ${usage_arch:+--arch "$usage_arch"}
+# Linux has no ABI-stable system Swift runtime; link it in so the tarball runs anywhere.
+if [ "$(uname -s)" = "Linux" ]; then STATIC="--static-swift-stdlib"; else STATIC=""; fi
+swift build -c release --disable-sandbox $STATIC ${usage_arch:+--arch "$usage_arch"}
 BIN_DIR=$(swift build -c release --show-bin-path --disable-sandbox ${usage_arch:+--arch "$usage_arch"})
 mkdir -p .build/release
 cp "$BIN_DIR/HimalayaMcpCLI" ".build/release/$BIN_NAME"

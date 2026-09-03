@@ -336,8 +336,16 @@ HIMALAYA_VERSION=v2   # env var, or "himalaya.version": "v2" in the config file
 
 ## Install
 
-**Recommended — per-user install to `~/.local/bin` (via mise).** This keeps the binary in your home
-directory (no `sudo`, nothing installed machine-wide):
+**Recommended — Homebrew (macOS & Linux).** Pulls a prebuilt binary and the `himalaya` CLI it drives:
+
+```bash
+brew tap amine2233/himalaya-mcp https://github.com/amine2233/himalaya-mcp
+brew install himalaya-mcp
+```
+
+Upgrade with `brew upgrade himalaya-mcp`, remove with `brew uninstall himalaya-mcp`.
+
+**Per-user install to `~/.local/bin` (via mise)** — builds from source, no `sudo`:
 
 ```bash
 mise run install                          # build -c release → ~/.local/bin/himalaya-mcp

@@ -18,5 +18,44 @@ jobs:
     with:
       binary-name: himalaya-mcp
       release-args: ${{ inputs.dry_run && '--dry-run --write-change-log' || '--write-change-log' }}
-      targets: '[{"runner":"macos-26","target":"darwin-amd64","args":"--arch x86_64"},{"runner":"macos-26","target":"darwin-arm64"},{"runner":"ubuntu-latest","target":"linux-x86_64"},{"runner":"ubuntu-latest","target":"linux-arm64"}]'
+      targets: '[{"runner":"macos-26","target":"darwin-amd64","args":"--arch x86_64"},{"runner":"macos-26","target":"darwin-arm64"},{"runner":"ubuntu-latest","target":"linux-x86_64"},{"runner":"ubuntu-24.04-arm","target":"linux-arm64"}]'
     secrets: inherit
+
+  # sha256 sums only exist once the tarballs are uploaded, so the formula is
+  # finished here rather than in bumpversion.sh.
+  formula:
+    name: Update Homebrew formula
+    needs: release-binaries
+    if: ${{ !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FORMULA: Formula/himalaya-mcp.rb
+        run: |
+          set -euo pipefail
+          TAG=$(gh release view --json tagName -q .tagName)
+          gh release download "$TAG" -p '*.tar.gz' -D dl
+          (cd dl && sha256sum ./*.tar.gz) > sums
+          awk -v tag="$TAG" '
+            FNR==NR { sub(/^\.\//, "", $2); sha[$2]=$1; next }
+            /^  version / { print "  version \"" tag "\""; next }
+            /url "/ { n=$0; sub(/.*\//,"",n); sub(/".*/,"",n); asset=n }
+            /sha256 "/ && asset { sub(/"[0-9a-f]*"/, "\"" sha[asset] "\""); asset="" }
+            { print }
+          ' sums "$FORMULA" > tmp && mv tmp "$FORMULA"
+          rm -rf dl sums
+          if git diff --quiet -- "$FORMULA"; then
+            echo "formula already up to date"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore(release): himalaya-mcp formula $TAG [skip ci]" -- "$FORMULA"
+          git push
