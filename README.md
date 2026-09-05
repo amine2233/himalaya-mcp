@@ -336,8 +336,30 @@ HIMALAYA_VERSION=v2   # env var, or "himalaya.version": "v2" in the config file
 
 ## Install
 
-**Recommended — per-user install to `~/.local/bin` (via mise).** This keeps the binary in your home
-directory (no `sudo`, nothing installed machine-wide):
+**Recommended — Homebrew (macOS & Linux).** Pulls a prebuilt binary and the `himalaya` CLI it drives:
+
+```bash
+brew tap amine2233/himalaya-mcp https://github.com/amine2233/himalaya-mcp
+brew install himalaya-mcp
+```
+
+Upgrade with `brew upgrade himalaya-mcp`, remove with `brew uninstall himalaya-mcp`.
+
+Homebrew 6 gates formulae from unofficial taps behind a trust list
+(`~/.homebrew/trust.json`, or `$XDG_CONFIG_HOME/homebrew/trust.json`). Tapping by hand as
+above already grants it, so the two commands are usually all you need. Pre-approve it
+explicitly — required for non-interactive installs such as CI or a provisioning script:
+
+```bash
+brew trust --tap amine2233/himalaya-mcp                    # the whole tap
+brew trust --formula amine2233/himalaya-mcp/himalaya-mcp  # …or just this formula
+brew trust --json v1                                      # review what you already trust
+```
+
+Because this repository is not named `homebrew-*`, the trust entry is recorded as the tap's
+remote URL rather than the short `owner/tap` name — expected, and harmless.
+
+**Per-user install to `~/.local/bin` (via mise)** — builds from source, no `sudo`:
 
 ```bash
 mise run install                          # build -c release → ~/.local/bin/himalaya-mcp

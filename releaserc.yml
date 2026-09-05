@@ -7,5 +7,6 @@ content:
     - "README.md"
     - "CHANGELOG.md"
     - "Sources/HimalayaMcpCLI/Commands/VersionCommand.swift"
+    - "Formula/himalaya-mcp.rb"
   scripts:
     - './bumpversion.sh "${lastRelease.version}" "${nextRelease.version}" "${nextRelease.type}"'
