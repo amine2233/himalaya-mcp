@@ -11,24 +11,24 @@ class HimalayaMcp < Formula
 
     on_arm do
       url "https://github.com/amine2233/himalaya-mcp/releases/download/#{version}/himalaya-mcp-darwin-arm64.tar.gz"
-      sha256 "baf977927f3ba6cc22006b66c547fe2dda0aff966adbe33a925a6ebf9caacb35"
+      sha256 "79c58d7d35502c52363abd7a9839dfa7bc570653ef8f77dd99e1a9b55feb3c18"
     end
 
     on_intel do
       url "https://github.com/amine2233/himalaya-mcp/releases/download/#{version}/himalaya-mcp-darwin-amd64.tar.gz"
-      sha256 "bfc77d81c9035fff787ac9aa041b0d2c3b05011308723df8dd8c900d2572a6b2"
+      sha256 "722ff690a431e077370e2c47f3ee4105a4308ffc38cebac796d0eede20869455"
     end
   end
 
   on_linux do
     on_arm do
       url "https://github.com/amine2233/himalaya-mcp/releases/download/#{version}/himalaya-mcp-linux-arm64.tar.gz"
-      sha256 "e4024f666ec50ce09e9fcf7c40cda4dceb809656cfe40411a01915cf9a577d3b"
+      sha256 "dee33e15856f0036f887ea3a2da5d90887d64de25f1d52fe98b8ca0d8eee82f5"
     end
 
     on_intel do
       url "https://github.com/amine2233/himalaya-mcp/releases/download/#{version}/himalaya-mcp-linux-x86_64.tar.gz"
-      sha256 "484688f5bf54d59abf5a48d5e44755eb0e72e632794fd9a10a259591162df1b1"
+      sha256 "fe9474ed19722d52d41aedbee727f90dda5cb67369c1667328b3740f1c94efd9"
     end
   end
 
