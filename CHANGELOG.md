@@ -1,3 +1,18 @@
+# [1.2.0](https://github.com/amine2233/himalaya-mcp/compare/1.1.0...1.2.0) (2026-11-24)
+
+
+## Features
+
+
+* add homebrew-formula inside the project to easy install (#11) ([12f59b1](https://github.com/amine2233/himalaya-mcp/commit/12f59b1dae852516c2ca883ff46373c218a9496a))
+
+
+## Bug Fixes
+
+
+* ship a fully static Linux binary (#13) ([ac5b3ba](https://github.com/amine2233/himalaya-mcp/commit/ac5b3ba6534702d9fcc5b955aa63756c32001c9d))
+
+
 # [1.1.0](https://github.com/amine2233/himalaya-mcp/compare/1.0.0...1.1.0) (2026-08-04)
 
 

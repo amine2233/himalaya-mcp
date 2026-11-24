@@ -1,7 +1,7 @@
 class HimalayaMcp < Formula
   desc "Himalaya email helper usable both as a CLI and as an MCP server"
   homepage "https://github.com/amine2233/himalaya-mcp"
-  version "1.1.0"
+  version "1.2.0"
   license "MIT"
 
   depends_on "himalaya"
