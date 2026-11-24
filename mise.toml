@@ -8,10 +8,11 @@
 [tools]
 # Swift toolchain — provisioned by mise so CI works on Linux (where ubuntu
 # runners ship no Swift) as well as macOS.
-# swift.org has no Arch Linux build: on Arch/Omarchy mise grabs the Ubuntu tarball,
-# which can't load there. Use the system Swift (>= 6.3) by adding
-# `[settings] disable_tools = ["swift"]` to a git-ignored mise.local.toml (see README).
-swift = "6.3.3"
+# swift.org ships no Arch Linux toolchain: there mise would fall back to the Ubuntu
+# tarball, which can't load (needs libncurses.so.6 / libpython3.9). On Arch-based
+# distros (Arch, Omarchy, EndeavourOS, Manjaro…) use the system Swift (>= 6.3,
+# e.g. `swift-bin`) instead; everywhere else (macOS, Ubuntu CI) pin 6.3.3.
+swift = '''{% set v = "6.3.3" %}{% if os() == "linux" %}{% set rel = read_file(path="/etc/os-release") %}{% if "ID=arch" in rel or "ID_LIKE=arch" in rel %}{% set v = "system" %}{% endif %}{% endif %}{{ v }}'''
 # executor-cli powers the CI lint/format/coverage tasks (provisioned by mise in CI).
 "github:executor-cli/executor" = "0.28.2"
 
