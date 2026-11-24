@@ -21,6 +21,10 @@ BIN_NAME = "himalaya-mcp"
 # Make the install dir visible on PATH inside this project's mise environment,
 # so the freshly-installed binary resolves without touching your shell profile.
 _.path = ["{{ env.HOME }}/.local/bin"]
+# Swift Static Linux SDK used by build-release on Linux. Must match the swift
+# version in [tools]. Checksum from the GPG-verified swift.org artifact bundle.
+SWIFT_STATIC_SDK_VERSION = "6.3.3"
+SWIFT_STATIC_SDK_CHECKSUM = "87c3eaf908e67c0e13a84367119e12273cec1d2cd3d81f7d74bb36722d6b607b"
 
 [tasks.build]
 description = "Build the release binary"
@@ -34,12 +38,28 @@ flag "--arch <arch>" help="Target architecture, e.g. arm64 or x86_64 (empty = ho
 run = '''
 #!/usr/bin/env bash
 set -euo pipefail
-# Linux has no ABI-stable system Swift runtime; link it in so the tarball runs anywhere.
-if [ "$(uname -s)" = "Linux" ]; then STATIC="--static-swift-stdlib"; else STATIC=""; fi
-swift build -c release --disable-sandbox $STATIC ${usage_arch:+--arch "$usage_arch"}
-BIN_DIR=$(swift build -c release --show-bin-path --disable-sandbox ${usage_arch:+--arch "$usage_arch"})
 mkdir -p .build/release
-cp "$BIN_DIR/HimalayaMcpCLI" ".build/release/$BIN_NAME"
+if [ "$(uname -s)" = "Linux" ]; then
+  # Fully static Linux binary (musl, via Swift's Static Linux SDK): no Swift runtime,
+  # glibc, libcurl or libstdc++ needed on the host, so it runs on any distro.
+  SDK_URL="https://download.swift.org/swift-${SWIFT_STATIC_SDK_VERSION}-release/static-sdk/swift-${SWIFT_STATIC_SDK_VERSION}-RELEASE/swift-${SWIFT_STATIC_SDK_VERSION}-RELEASE_static-linux-0.1.0.artifactbundle.tar.gz"
+  if ! swift sdk list | grep -q "swift-${SWIFT_STATIC_SDK_VERSION}-RELEASE_static-linux"; then
+    swift sdk install "$SDK_URL" --checksum "$SWIFT_STATIC_SDK_CHECKSUM"
+  fi
+  case "${usage_arch:-$(uname -m)}" in
+    arm64|aarch64) TRIPLE="aarch64-swift-linux-musl" ;;
+    x86_64|amd64)  TRIPLE="x86_64-swift-linux-musl" ;;
+    *) echo "unsupported arch: ${usage_arch:-$(uname -m)}" >&2; exit 1 ;;
+  esac
+  swift build -c release --disable-sandbox --swift-sdk "$TRIPLE"
+  BIN_DIR=$(swift build -c release --show-bin-path --disable-sandbox --swift-sdk "$TRIPLE")
+  cp "$BIN_DIR/HimalayaMcpCLI" ".build/release/$BIN_NAME"
+  strip ".build/release/$BIN_NAME"
+else
+  swift build -c release --disable-sandbox ${usage_arch:+--arch "$usage_arch"}
+  BIN_DIR=$(swift build -c release --show-bin-path --disable-sandbox ${usage_arch:+--arch "$usage_arch"})
+  cp "$BIN_DIR/HimalayaMcpCLI" ".build/release/$BIN_NAME"
+fi
 '''
 
 [tasks.release]

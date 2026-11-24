@@ -14,9 +14,11 @@ jobs:
       contents: write
       issues: write
       pull-requests: write
-    uses: amine2233/ci-shared/.github/workflows/release-binaries.yml@1.1
+    uses: amine2233/ci-shared/.github/workflows/release-binaries.yml@1.2
     with:
       binary-name: himalaya-mcp
+      # ubuntu-latest (26.04) dropped libxml2.so.2, which the executor Linux binary needs.
+      release-runner: "ubuntu-24.04"
       release-args: ${{ inputs.dry_run && '--dry-run --write-change-log' || '--write-change-log' }}
       targets: '[{"runner":"macos-26","target":"darwin-amd64","args":"--arch x86_64"},{"runner":"macos-26","target":"darwin-arm64"},{"runner":"ubuntu-latest","target":"linux-x86_64"},{"runner":"ubuntu-24.04-arm","target":"linux-arm64"}]'
     secrets: inherit
