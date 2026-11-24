@@ -51,10 +51,10 @@ if [ "$(uname -s)" = "Linux" ]; then
     x86_64|amd64)  TRIPLE="x86_64-swift-linux-musl" ;;
     *) echo "unsupported arch: ${usage_arch:-$(uname -m)}" >&2; exit 1 ;;
   esac
-  swift build -c release --disable-sandbox --swift-sdk "$TRIPLE"
+  # Strip at link time (lld) so cross-compiled targets need no foreign `strip`.
+  swift build -c release --disable-sandbox --swift-sdk "$TRIPLE" -Xlinker --strip-all
   BIN_DIR=$(swift build -c release --show-bin-path --disable-sandbox --swift-sdk "$TRIPLE")
   cp "$BIN_DIR/HimalayaMcpCLI" ".build/release/$BIN_NAME"
-  strip ".build/release/$BIN_NAME"
 else
   swift build -c release --disable-sandbox ${usage_arch:+--arch "$usage_arch"}
   BIN_DIR=$(swift build -c release --show-bin-path --disable-sandbox ${usage_arch:+--arch "$usage_arch"})

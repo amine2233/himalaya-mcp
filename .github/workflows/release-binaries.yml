@@ -20,7 +20,10 @@ jobs:
       # ubuntu-latest (26.04) dropped libxml2.so.2, which the executor Linux binary needs.
       release-runner: "ubuntu-24.04"
       release-args: ${{ inputs.dry_run && '--dry-run --write-change-log' || '--write-change-log' }}
-      targets: '[{"runner":"macos-26","target":"darwin-amd64","args":"--arch x86_64"},{"runner":"macos-26","target":"darwin-arm64"},{"runner":"ubuntu-latest","target":"linux-x86_64"},{"runner":"ubuntu-24.04-arm","target":"linux-arm64"}]'
+      # Linux targets are fully static (musl) and both built on x86 ubuntu-24.04:
+      # 26.04 lacks libxml2.so.2 (swift-sdk, executor) and executor has no linux-arm64
+      # build, so linux-arm64 is cross-compiled via the Static Linux SDK.
+      targets: '[{"runner":"macos-26","target":"darwin-amd64","args":"--arch x86_64"},{"runner":"macos-26","target":"darwin-arm64"},{"runner":"ubuntu-24.04","target":"linux-x86_64"},{"runner":"ubuntu-24.04","target":"linux-arm64","args":"--arch aarch64"}]'
     secrets: inherit
 
   # sha256 sums only exist once the tarballs are uploaded, so the formula is
