@@ -8,6 +8,9 @@
 [tools]
 # Swift toolchain — provisioned by mise so CI works on Linux (where ubuntu
 # runners ship no Swift) as well as macOS.
+# swift.org has no Arch Linux build: on Arch/Omarchy mise grabs the Ubuntu tarball,
+# which can't load there. Use the system Swift (>= 6.3) by adding
+# `[settings] disable_tools = ["swift"]` to a git-ignored mise.local.toml (see README).
 swift = "6.3.3"
 # executor-cli powers the CI lint/format/coverage tasks (provisioned by mise in CI).
 "github:executor-cli/executor" = "0.28.2"

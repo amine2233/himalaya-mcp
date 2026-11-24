@@ -10,3 +10,6 @@ DerivedData/
 # Local MCP server config (machine-specific absolute paths)
 .mcp.json
 boards.sqlite*
+
+# Per-checkout mise overrides (e.g. disable_tools = ["swift"] on Arch/Omarchy)
+mise.local.toml

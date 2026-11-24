@@ -367,6 +367,30 @@ mise run install --bin-path /usr/local/bin # …or install to a specific directo
 mise run setup-path                       # optional: add ~/.local/bin to PATH in your shell profile
 ```
 
+> **Arch Linux / Omarchy (and other distros without an official Swift tarball):** `mise.toml` pins
+> `swift` so CI gets a toolchain, but swift.org only publishes Linux builds for Ubuntu, Debian, Fedora,
+> RHEL and Amazon Linux. On Arch-based systems mise falls back to the Ubuntu build, which needs
+> `libncurses.so.6`, `libpanel.so.6`, `libform.so.6` and `libpython3.9.so.1.0` (Arch only ships the
+> `ncursesw` variants and a newer Python). The install fails, and because mise provisions tools before
+> running a task, **every** `mise run …` fails with it:
+>
+> ```text
+> mise ✗ swift@6.3.3 failed: this swift build needs shared libraries missing from this host:
+>   libform.so.6, libncurses.so.6, libpanel.so.6, libpython3.9.so.1.0
+> ```
+>
+> Use the distro's Swift instead (Omarchy ships `swift-bin`; it must be **≥ 6.3**, the package's
+> `swift-tools-version`). Tell mise to skip its own `swift` for this checkout only:
+>
+> ```bash
+> swift --version                          # system toolchain, must be >= 6.3
+> printf '[settings]\ndisable_tools = ["swift"]\n' > mise.local.toml   # git-ignored
+> mise trust mise.local.toml
+> mise run install
+> ```
+>
+> Or as a one-off: `MISE_DISABLE_TOOLS=swift mise run install`.
+
 `mise run install` builds the release binary and copies it to `~/.local/bin/himalaya-mcp`. Pick a
 different directory with `--bin-path <dir>` (or `INSTALL_DIR=/some/dir mise run install`);
 `mise run uninstall [--bin-path <dir>]` removes it. `~/.local/bin` is already on `PATH` inside this
