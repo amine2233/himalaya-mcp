@@ -1,3 +1,12 @@
+# [1.2.1](https://github.com/amine2233/himalaya-mcp/compare/1.2.0...1.2.1) (2026-11-24)
+
+
+## Bug Fixes
+
+
+* build both Linux binaries on ubuntu-24.04 (#14) ([33312b8](https://github.com/amine2233/himalaya-mcp/commit/33312b8005dc3991021db5e8b07eba80841bbc0f))
+
+
 # [1.2.0](https://github.com/amine2233/himalaya-mcp/compare/1.1.0...1.2.0) (2026-11-24)
 
 
