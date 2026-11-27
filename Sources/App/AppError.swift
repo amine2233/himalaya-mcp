@@ -51,7 +51,7 @@ extension AppError: CustomStringConvertible {
             return "himalaya command timed out after \(milliseconds) ms."
         case .mmlNotFound:
             return """
-            The mml binary is required for send_template and draft_reply but was not found. \
+            The mml binary is required for send_template but was not found. \
             Install it with: cargo install mime-meta-language --locked --features cli \
             (crate name is "mime-meta-language", binary is "mml", --features cli is mandatory).
             """

@@ -54,13 +54,13 @@ private final class RecordingHimalaya: HimalayaService {
 /// One place to wire all test services. Update here when a new ServiceKey is added.
 private enum TestApp {
     static let defaultCaps = Capabilities(
-        himalayaVersion: "test", himalayaFamily: .v1,
+        himalayaVersion: "test",
         mmlPresent: true, mmlVersion: "1.1.1", templateStrategy: .mmlExternal
     )
 
     static func build(
         himalaya: any HimalayaService,
-        dialect: any HimalayaDialect = HimalayaDialectV1(),
+        dialect: any HimalayaDialect = HimalayaDialectV2(),
         mml: (any MMLService)? = nil,
         capabilities: Capabilities? = nil
     ) -> Application {
@@ -78,7 +78,7 @@ private enum TestApp {
 private func appWithRecordingHimalaya(
     output: String = "",
     outputFor: (@Sendable ([String]) -> String)? = nil,
-    dialect: any HimalayaDialect = HimalayaDialectV1(),
+    dialect: any HimalayaDialect = HimalayaDialectV2(),
     mml: (any MMLService)? = nil,
     capabilities: Capabilities? = nil
 ) -> (Application, RecordingHimalaya) {
@@ -143,7 +143,7 @@ func listEmailsBuildsArgumentsWithAllOptions() async throws {
 
     #expect(output == "envelopes")
     #expect(himalaya.calls.withLock { $0 } == [[
-        "envelope", "list", "--folder", "Archive", "--page-size", "20", "--page", "2", "--account", "work"
+        "envelope", "list", "--mailbox", "Archive", "--page-size", "20", "--page", "2", "--account", "work"
     ]])
 }
 
@@ -173,12 +173,12 @@ func searchEmailsSplitsQueryIntoTokens() async throws {
     _ = try await SearchEmailsRequest().execute(input, in: app)
 
     #expect(himalaya.calls.withLock { $0 } == [[
-        "envelope", "list", "--folder", "INBOX", "from", "alice", "and", "subject", "invoice"
+        "envelope", "search", "--mailbox", "INBOX", "from", "alice", "and", "subject", "invoice"
     ]])
 }
 
 @Test
-func readEmailUsesNoHeaders() async throws {
+func readEmailBuildsArguments() async throws {
     let (app, himalaya) = appWithRecordingHimalaya(output: "body")
     let input = ReadEmailRequest.Input(id: "42", account: "work")
 
@@ -186,27 +186,37 @@ func readEmailUsesNoHeaders() async throws {
 
     #expect(output == "body")
     #expect(himalaya.calls.withLock { $0 } == [[
-        "message", "read", "42", "--no-headers", "--account", "work"
+        "message", "read", "42", "--account", "work"
     ]])
 }
 
 @Test
-func readEmailHtmlExportsAndReturnsHtmlPart() async throws {
-    let (app, himalaya) = appWithRecordingHimalaya()
+func readEmailHtmlReturnsDecodedHtmlParts() async throws {
+    let json = #"""
+    {"html_body":[1],"text_body":[2],"parts":[
+      {"headers":[],"body":{"Multipart":[1,2]}},
+      {"headers":[],"body":{"Html":"<p>Caf\u00e9</p>\n"}},
+      {"headers":[],"body":{"Text":"Café"}}
+    ]}
+    """#
+    let (app, himalaya) = appWithRecordingHimalaya(output: json)
 
     let output = try await ReadEmailHtmlRequest().execute(
         ReadEmailHtmlRequest.Input(id: "7", folder: "INBOX"),
         in: app
     )
 
-    // The stub writes no files, so no HTML part is found — but the export command
-    // must have been issued with a --destination temp directory.
+    #expect(output == "<p>Café</p>")
+    #expect(himalaya.calls.withLock { $0 } == [["message", "read", "7", "--mailbox", "INBOX", "--json"]])
+}
+
+@Test
+func readEmailHtmlReportsMissingHtmlPart() async throws {
+    // mail-parser points html_body at the text part when there is no HTML.
+    let json = #"{"html_body":[0],"text_body":[0],"parts":[{"headers":[],"body":{"Text":"plain"}}]}"#
+    let (app, _) = appWithRecordingHimalaya(output: json)
+    let output = try await ReadEmailHtmlRequest().execute(ReadEmailHtmlRequest.Input(id: "7"), in: app)
     #expect(output == "No HTML part found for message 7.")
-    let call = try #require(himalaya.calls.withLock { $0 }.first)
-    #expect(call.prefix(3) == ["message", "export", "7"])
-    #expect(call.contains("--destination"))
-    #expect(call.contains("--folder"))
-    #expect(call.contains("INBOX"))
 }
 
 @Test
@@ -215,7 +225,7 @@ func listFoldersBuildsArguments() async throws {
     let output = try await ListFoldersRequest().execute(ListFoldersRequest.Input(account: "work"), in: app)
 
     #expect(output == "folders")
-    #expect(himalaya.calls.withLock { $0 } == [["folder", "list", "--account", "work"]])
+    #expect(himalaya.calls.withLock { $0 } == [["mailbox", "list", "--account", "work"]])
 }
 
 @Test
@@ -223,7 +233,7 @@ func createFolderBuildsArguments() async throws {
     let (app, himalaya) = appWithRecordingHimalaya()
     _ = try await CreateFolderRequest().execute(CreateFolderRequest.Input(name: "Archive"), in: app)
 
-    #expect(himalaya.calls.withLock { $0 } == [["folder", "add", "Archive"]])
+    #expect(himalaya.calls.withLock { $0 } == [["imap", "create", "Archive"]])
 }
 
 @Test
@@ -234,7 +244,7 @@ func deleteFolderBuildsArguments() async throws {
         in: app
     )
 
-    #expect(himalaya.calls.withLock { $0 } == [["folder", "delete", "Old", "--account", "work"]])
+    #expect(himalaya.calls.withLock { $0 } == [["imap", "delete", "Old", "--account", "work"]])
 }
 
 @Test
@@ -244,7 +254,7 @@ func flagEmailAddsFlags() async throws {
     _ = try await FlagEmailRequest().execute(input, in: app)
 
     #expect(himalaya.calls.withLock { $0 } == [[
-        "flag", "add", "9", "Seen", "Flagged", "--folder", "INBOX"
+        "flag", "add", "--flag", "Seen", "--flag", "Flagged", "9", "--mailbox", "INBOX"
     ]])
 }
 
@@ -256,7 +266,7 @@ func flagEmailRemovesFlags() async throws {
         in: app
     )
 
-    #expect(himalaya.calls.withLock { $0 } == [["flag", "remove", "9", "Seen"]])
+    #expect(himalaya.calls.withLock { $0 } == [["flag", "remove", "--flag", "Seen", "9"]])
 }
 
 @Test
@@ -271,13 +281,13 @@ func flagEmailRejectsEmptyFlags() async throws {
 }
 
 @Test
-func moveEmailPutsTargetBeforeId() async throws {
+func moveEmailBuildsArguments() async throws {
     let (app, himalaya) = appWithRecordingHimalaya()
     let input = MoveEmailRequest.Input(id: "3", targetFolder: "Archive", folder: "INBOX", account: "work")
     _ = try await MoveEmailRequest().execute(input, in: app)
 
     #expect(himalaya.calls.withLock { $0 } == [[
-        "message", "move", "Archive", "3", "--folder", "INBOX", "--account", "work"
+        "message", "move", "--to", "Archive", "--from", "INBOX", "3", "--account", "work"
     ]])
 }
 
@@ -335,7 +345,7 @@ func sendEmailDraftSavesToDrafts() async throws {
     #expect(output == "Draft saved to Drafts.")
     let calls = himalaya.calls.withLock { $0 }
     #expect(calls.count == 1)
-    #expect(calls[0] == ["template", "save", "--folder", "Drafts", "--account", "work"])
+    #expect(calls[0] == ["message", "save", "--mailbox", "Drafts", "--account", "work"])
     #expect(himalaya.stdins.withLock { $0 }.first == compiledMime)
 }
 
@@ -355,7 +365,7 @@ func sendEmailDraftHonoursDraftFolder() async throws {
         ),
         in: app
     )
-    #expect(himalaya.calls.withLock { $0 }.last == ["template", "save", "--folder", "Labels/Drafts"])
+    #expect(himalaya.calls.withLock { $0 }.last == ["message", "save", "--mailbox", "Labels/Drafts"])
 }
 
 @Test
@@ -377,7 +387,7 @@ func sendEmailSendsCompiledMIMERaw() async throws {
 // MARK: - send_email without mml (native MIME on himalaya v2)
 
 private let noMMLv2Caps = Capabilities(
-    himalayaVersion: "test", himalayaFamily: .v2,
+    himalayaVersion: "test",
     mmlPresent: false, mmlVersion: nil, templateStrategy: .unavailable
 )
 
@@ -434,24 +444,6 @@ func sendEmailWithoutMMLOnV2SavesNativeDraft() async throws {
     let saved = try #require(himalaya.stdins.withLock { $0 }.first ?? nil)
     #expect(saved.contains("MIME-Version: 1.0\r\n"))
     #expect(saved.hasSuffix("\r\n\r\nHello"))
-}
-
-@Test
-func sendEmailWithoutMMLOnV1DraftUsesBuiltinTemplateSave() async throws {
-    let (app, himalaya) = appWithRecordingHimalaya(
-        mml: StubMML(available: false, error: AppError.mmlNotFound),
-        capabilities: Capabilities(
-            himalayaVersion: "test", himalayaFamily: .v1,
-            mmlPresent: false, mmlVersion: nil, templateStrategy: .himalayaBuiltin
-        )
-    )
-    let output = try await SendEmailRequest().execute(
-        SendEmailRequest.Input(to: "b@c.d", subject: "Hi", body: "Hello", action: .draft),
-        in: app
-    )
-    #expect(output == "Draft saved to Drafts.")
-    #expect(himalaya.calls.withLock { $0 } == [["template", "save", "--folder", "Drafts"]])
-    #expect(himalaya.stdins.withLock { $0 }.first == "To: b@c.d\nSubject: Hi\n\nHello")
 }
 
 @Test
@@ -520,22 +512,37 @@ func appErrorLocalizedDescriptionIsReadable() {
 }
 
 @Test
-func draftReplyUsesAllFlag() async throws {
-    let (app, himalaya) = appWithRecordingHimalaya()
+func draftReplyAllCcsOriginalRecipientsExceptSenderAndSelf() async throws {
+    let original = #"""
+    {"html_body":[0],"text_body":[0],"parts":[{"headers":[
+      {"name":"from","value":{"Address":{"List":[{"name":"Alice","address":"alice@x.y"}]}}},
+      {"name":"to","value":{"Address":{"List":[{"name":null,"address":"Me@Mine.org"},
+                                                {"name":"Bob","address":"bob@x.y"}]}}},
+      {"name":"cc","value":{"Address":{"Group":[{"name":"team","addresses":[
+        {"name":null,"address":"carol@x.y"},{"name":null,"address":"alice@x.y"}]}]}}},
+      {"name":"delivered_to","value":{"Text":"me@mine.org"}},
+      {"name":{"other":"X-Original-To"},"value":{"Text":"me@mine.org"}}
+    ],"body":{"Text":"hi"}}]}
+    """#
+    let (app, himalaya) = appWithRecordingHimalaya(outputFor: { args in
+        args.last == "--json" ? original : "REPLY"
+    })
     let input = DraftReplyRequest.Input(id: "5", body: "Thanks", replyAll: true, folder: "INBOX")
-    _ = try await DraftReplyRequest().execute(input, in: app)
+    let output = try await DraftReplyRequest().execute(input, in: app)
 
-    #expect(himalaya.calls.withLock { $0 } == [[
-        "template", "reply", "5", "--all", "--folder", "INBOX", "Thanks"
-    ]])
+    #expect(output == "REPLY")
+    #expect(himalaya.calls.withLock { $0 } == [
+        ["message", "read", "5", "--mailbox", "INBOX", "--json"],
+        ["message", "reply", "5", "--mailbox", "INBOX", "--body", "Thanks", "--cc", "bob@x.y,carol@x.y"]
+    ])
 }
 
 @Test
-func draftReplyOmitsAllFlagWhenNotRequested() async throws {
+func draftReplyToSenderOnlyDoesNotReadOriginal() async throws {
     let (app, himalaya) = appWithRecordingHimalaya()
     _ = try await DraftReplyRequest().execute(DraftReplyRequest.Input(id: "5"), in: app)
 
-    #expect(himalaya.calls.withLock { $0 } == [["template", "reply", "5"]])
+    #expect(himalaya.calls.withLock { $0 } == [["message", "reply", "5", "--body", ""]])
 }
 
 @Test
@@ -607,7 +614,7 @@ func deleteEmailBuildsArgumentsWithMultipleIds() async throws {
 
     #expect(output == "Deleted 2 message(s): 3, 4.")
     #expect(himalaya.calls.withLock { $0 } == [[
-        "message", "delete", "3", "4", "--folder", "INBOX", "--account", "work"
+        "message", "delete", "3", "4", "--mailbox", "INBOX", "--account", "work"
     ]])
 }
 
@@ -618,19 +625,6 @@ func deleteEmailRejectsEmptyIds() async throws {
         try await DeleteEmailRequest().execute(DeleteEmailRequest.Input(ids: [""]), in: app)
     }
     #expect(himalaya.calls.withLock { $0 }.isEmpty)
-}
-
-@Test
-func v1DialectAppliesDefaultAccountAndFolder() {
-    let dialect = HimalayaDialectV1(defaultAccount: "work", defaultFolder: "Archive")
-    // Defaults fill in when the call omits them.
-    #expect(dialect.listEnvelopes(mailbox: nil, pageSize: nil, page: nil, account: nil).arguments
-        == ["envelope", "list", "--folder", "Archive", "--account", "work"])
-    // Explicit values win over defaults.
-    #expect(dialect.listEnvelopes(mailbox: "INBOX", pageSize: nil, page: nil, account: "perso").arguments
-        == ["envelope", "list", "--folder", "INBOX", "--account", "perso"])
-    // `account list` / `mailbox list` don't carry --folder.
-    #expect(dialect.listAccountsJSON().arguments == ["account", "list", "-o", "json"])
 }
 
 @Test
@@ -687,7 +681,7 @@ func doctorChecksSingleAccount() async throws {
     #expect(report.accounts.count == 1)
     #expect(report.accounts.first?.name == "perso")
     // The folder-list probe targeted exactly the requested account.
-    #expect(probed.withLock { $0 }.contains(["folder", "list", "--account", "perso"]))
+    #expect(probed.withLock { $0 }.contains(["mailbox", "list", "--account", "perso"]))
 }
 
 @Test
@@ -730,123 +724,12 @@ func v2DialectMapsCommandsAndRejectsUnsupported() {
         ["message", "send"],
         standardInput: "raw"
     ))
-
-    // Commands that v2 doesn't offer surface a clear error.
-    #expect(throws: AppError
-        .invalidArgument("Deleting messages (delete_email) is not supported on himalaya v2.")) {
-        try v2.deleteMessages(ids: ["1"], mailbox: nil, account: nil)
-    }
-    #expect(throws: (any Error).self) { try v2.exportMessage(
-        id: "1",
-        destination: "/tmp",
-        mailbox: nil,
-        account: nil
-    ) }
-    #expect(throws: (any Error).self) { try v2.createMailbox(name: "X", account: nil) }
-}
-
-// MARK: - Full v1 dialect argument generation
-
-@Test
-func v1DialectGeneratesEveryCommand() throws {
-    let d = HimalayaDialectV1()
-
-    #expect(d.listEnvelopes(mailbox: "INBOX", pageSize: 20, page: 2, account: "work").arguments
-        == ["envelope", "list", "--folder", "INBOX", "--page-size", "20", "--page", "2", "--account", "work"])
-    #expect(d.listEnvelopes(mailbox: nil, pageSize: nil, page: nil, account: nil).arguments
-        == ["envelope", "list"])
-    #expect(try d.searchEnvelopes(query: "from a and subject b", mailbox: "INBOX", account: nil).arguments
-        == ["envelope", "list", "--folder", "INBOX", "from", "a", "and", "subject", "b"])
-    #expect(try d.readMessage(id: "42", mailbox: nil, account: "work").arguments
-        == ["message", "read", "42", "--no-headers", "--account", "work"])
-    #expect(try d.exportMessage(id: "7", destination: "/tmp/x", mailbox: "INBOX", account: nil).arguments
-        == ["message", "export", "7", "--destination", "/tmp/x", "--folder", "INBOX"])
-    #expect(try d.listMailboxes(account: "work").arguments == ["folder", "list", "--account", "work"])
-    #expect(try d.createMailbox(name: "Archive", account: nil).arguments == ["folder", "add", "Archive"])
-    #expect(try d.deleteMailbox(name: "Old", account: "work").arguments
-        == ["folder", "delete", "Old", "--account", "work"])
-    #expect(try d.setFlags(id: "9", flags: ["Seen", "Flagged"], add: true, mailbox: "INBOX", account: nil)
-        .arguments
-        == ["flag", "add", "9", "Seen", "Flagged", "--folder", "INBOX"])
-    #expect(try d.setFlags(id: "9", flags: ["Seen"], add: false, mailbox: nil, account: nil).arguments
-        == ["flag", "remove", "9", "Seen"])
-    #expect(try d.moveMessage(id: "3", target: "Archive", mailbox: "INBOX", account: "work").arguments
-        == ["message", "move", "Archive", "3", "--folder", "INBOX", "--account", "work"])
-    #expect(try d.composeMessage(
-        from: nil,
-        to: "a@b.c",
-        cc: nil,
-        bcc: nil,
-        subject: "Hi",
-        body: "Body",
-        attachments: [],
-        account: nil
-    ).arguments
-        == ["template", "write", "--header", "To:a@b.c", "--header", "Subject:Hi", "Body"])
-    #expect(try d.composeMessage(
-        from: "me@x.y",
-        to: "a@b.c",
-        cc: "c@x.y",
-        bcc: nil,
-        subject: "Hi",
-        body: "Body",
-        attachments: [],
-        account: nil
-    ).arguments
-        == [
-            "template",
-            "write",
-            "--header",
-            "To:a@b.c",
-            "--header",
-            "From:me@x.y",
-            "--header",
-            "Cc:c@x.y",
-            "--header",
-            "Subject:Hi",
-            "Body"
-        ])
-    #expect(try d.saveMessage("MSG", folder: "Drafts", account: "work")
-        == HimalayaInvocation(
-            ["template", "save", "--folder", "Drafts", "--account", "work"],
-            standardInput: "MSG"
-        ))
-    #expect(try d.replyTemplate(id: "5", body: "Thanks", all: true, mailbox: "INBOX", account: nil).arguments
-        == ["template", "reply", "5", "--all", "--folder", "INBOX", "Thanks"])
-    #expect(try d.replyTemplate(id: "5", body: nil, all: false, mailbox: nil, account: nil).arguments
-        == ["template", "reply", "5"])
-    #expect(try d.sendTemplate("RAW", account: "work") == HimalayaInvocation(
-        ["template", "send", "--account", "work"],
-        standardInput: "RAW"
-    ))
-    #expect(try d.sendMessage("RAW", account: "work") == HimalayaInvocation(
-        ["message", "send", "--account", "work"],
-        standardInput: "RAW"
-    ))
-    #expect(try d.listAttachments(id: "7", destination: "/tmp/a", mailbox: nil, account: nil).arguments
-        == ["attachment", "download", "7", "--downloads-dir", "/tmp/a"])
-    #expect(try d.downloadAttachments(id: "7", destination: "/tmp/a", mailbox: "INBOX", account: nil)
-        .arguments
-        == ["attachment", "download", "7", "--downloads-dir", "/tmp/a", "--folder", "INBOX"])
-    #expect(try d.deleteMessages(ids: ["3", "4"], mailbox: "INBOX", account: "work").arguments
-        == ["message", "delete", "3", "4", "--folder", "INBOX", "--account", "work"])
-    #expect(d.listAccountsJSON().arguments == ["account", "list", "-o", "json"])
-    #expect(d.probeAccount("work").arguments == ["folder", "list", "--account", "work"])
-}
-
-@Test
-func v1DialectDefaultsFillOnlyWhenOmitted() throws {
-    let d = HimalayaDialectV1(defaultAccount: "work", defaultFolder: "Archive")
-    #expect(try d.readMessage(id: "1", mailbox: nil, account: nil).arguments
-        == ["message", "read", "1", "--no-headers", "--folder", "Archive", "--account", "work"])
-    #expect(try d.readMessage(id: "1", mailbox: "Sent", account: "perso").arguments
-        == ["message", "read", "1", "--no-headers", "--folder", "Sent", "--account", "perso"])
 }
 
 // MARK: - Full v2 dialect argument generation
 
 @Test
-func v2DialectGeneratesSupportedCommands() throws {
+func v2DialectGeneratesEveryCommand() throws {
     let d = HimalayaDialectV2()
 
     #expect(d.listEnvelopes(mailbox: "INBOX", pageSize: 20, page: 2, account: "work").arguments
@@ -888,6 +771,16 @@ func v2DialectGeneratesSupportedCommands() throws {
         == ["attachment", "download", "7", "--dir", "/tmp/a"])
     #expect(d.listAccountsJSON().arguments == ["account", "list", "--json"])
     #expect(d.probeAccount("work").arguments == ["mailbox", "list", "--account", "work"])
+    #expect(d.readMessageJSON(id: "7", mailbox: "INBOX", account: "work").arguments
+        == ["message", "read", "7", "--mailbox", "INBOX", "--account", "work", "--json"])
+    #expect(d.createMailbox(name: "Folders/X", account: "work").arguments
+        == ["imap", "create", "Folders/X", "--account", "work"])
+    #expect(d.deleteMailbox(name: "Folders/X", account: nil).arguments == ["imap", "delete", "Folders/X"])
+    #expect(d.replyMessage(id: "5", body: "Hi", cc: ["a@b.c", "d@e.f"], mailbox: "INBOX", account: nil)
+        .arguments
+        == ["message", "reply", "5", "--mailbox", "INBOX", "--body", "Hi", "--cc", "a@b.c,d@e.f"])
+    #expect(d.deleteMessages(ids: ["3", "4"], mailbox: nil, account: "work").arguments
+        == ["message", "delete", "3", "4", "--account", "work"])
 }
 
 @Test
@@ -895,20 +788,6 @@ func v2DialectDefaultsUseMailboxFlag() {
     let d = HimalayaDialectV2(defaultAccount: "work", defaultFolder: "Archive")
     #expect(d.listEnvelopes(mailbox: nil, pageSize: nil, page: nil, account: nil).arguments
         == ["envelope", "list", "--mailbox", "Archive", "--account", "work"])
-}
-
-@Test
-func v2DialectRejectsUnsupportedCommands() {
-    let d = HimalayaDialectV2()
-    for probe: () throws -> Any in [
-        { try d.exportMessage(id: "1", destination: "/tmp", mailbox: nil, account: nil) },
-        { try d.createMailbox(name: "X", account: nil) },
-        { try d.deleteMailbox(name: "X", account: nil) },
-        { try d.replyTemplate(id: "1", body: nil, all: false, mailbox: nil, account: nil) },
-        { try d.deleteMessages(ids: ["1"], mailbox: nil, account: nil) }
-    ] {
-        #expect(throws: (any Error).self) { _ = try probe() }
-    }
 }
 
 @Test
@@ -1231,23 +1110,14 @@ func sendMessageTextPlainSentVerbatim() async throws {
 @Test
 func sendMessageWorksWithoutMML() async throws {
     let raw = "From: a@b.com\r\nTo: c@d.com\r\nSubject: test\r\n\r\nHello"
-    for (dialect, caps) in [
-        (HimalayaDialectV1() as any HimalayaDialect, Capabilities(
-            himalayaVersion: "test", himalayaFamily: .v1,
-            mmlPresent: false, mmlVersion: nil, templateStrategy: .himalayaBuiltin
-        )),
-        (HimalayaDialectV2() as any HimalayaDialect, noMMLv2Caps)
-    ] {
-        let (app, himalaya) = appWithRecordingHimalaya(
-            dialect: dialect,
-            mml: StubMML(available: false, error: AppError.mmlNotFound),
-            capabilities: caps
-        )
-        let output = try await SendMessageRequest().execute(SendMessageRequest.Input(message: raw), in: app)
-        #expect(output == "sent: true")
-        #expect(himalaya.calls.withLock { $0 } == [["message", "send"]])
-        #expect(himalaya.stdins.withLock { $0 } == [raw])
-    }
+    let (app, himalaya) = appWithRecordingHimalaya(
+        mml: StubMML(available: false, error: AppError.mmlNotFound),
+        capabilities: noMMLv2Caps
+    )
+    let output = try await SendMessageRequest().execute(SendMessageRequest.Input(message: raw), in: app)
+    #expect(output == "sent: true")
+    #expect(himalaya.calls.withLock { $0 } == [["message", "send"]])
+    #expect(himalaya.stdins.withLock { $0 } == [raw])
 }
 
 @Test
@@ -1324,8 +1194,7 @@ func sendTemplateFailsWhenMMLAbsentOnV2() async throws {
     let (app, _) = appWithRecordingHimalaya(
         mml: StubMML(available: false),
         capabilities: Capabilities(
-            himalayaVersion: "2.0.0", himalayaFamily: .v2,
-            mmlPresent: false, mmlVersion: nil, templateStrategy: .unavailable
+            himalayaVersion: "2.0.0", mmlPresent: false, mmlVersion: nil, templateStrategy: .unavailable
         )
     )
     await #expect(throws: AppError.mmlNotFound) {
@@ -1339,13 +1208,12 @@ func sendTemplateFailsWhenMMLAbsentOnV2() async throws {
 func capabilitiesRequestReturnsDetectedValues() async throws {
     let (app, _) = appWithRecordingHimalaya(
         capabilities: Capabilities(
-            himalayaVersion: "v2.0.0", himalayaFamily: .v2,
-            mmlPresent: true, mmlVersion: "v1.1.1", templateStrategy: .mmlExternal
+            himalayaVersion: "v2.0.0", mmlPresent: true, mmlVersion: "v1.1.1", templateStrategy: .mmlExternal
         )
     )
     let output = try await CapabilitiesRequest().execute(CapabilitiesRequest.Input(), in: app)
     #expect(output.contains("himalaya_version: v2.0.0"))
-    #expect(output.contains("himalaya_family: v2"))
+    #expect(!output.contains("himalaya_family"))
     #expect(output.contains("mml_present: true"))
     #expect(output.contains("template_strategy: mml_external"))
 }

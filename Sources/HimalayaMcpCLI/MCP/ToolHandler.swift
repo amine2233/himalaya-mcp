@@ -256,7 +256,7 @@ extension ToolHandler {
     static let draftReply = ToolHandler(
         tool: Tool(
             name: "draft_reply",
-            description: "Generate a reply template for a message (does not send). Returns a template for send_email.",
+            description: "Compose a reply to a message (does not send). Returns the quoted reply text to review and send with send_email.",
             inputSchema: .object([
                 "type": .string("object"),
                 "properties": .object([
@@ -321,7 +321,7 @@ extension ToolHandler {
                     "from": .object([
                         "type": .string("string"),
                         "description": .string(
-                            "Sender address. On v1 himalaya auto-fills it; v2 needs it for draft/send."
+                            "Sender address. Needed for draft/send when the account config does not resolve it."
                         )
                     ]),
                     "attachments": attachmentsProperty,
@@ -426,7 +426,7 @@ extension ToolHandler {
     static let capabilities = ToolHandler(
         tool: Tool(
             name: "capabilities",
-            description: "Show detected himalaya/mml versions, family, and template strategy. Diagnostic tool.",
+            description: "Show detected himalaya/mml versions and template strategy. Diagnostic tool.",
             inputSchema: .object([
                 "type": .string("object"),
                 "properties": .object([:])

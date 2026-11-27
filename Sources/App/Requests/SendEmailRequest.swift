@@ -5,9 +5,7 @@
 /// Uses the `EmailComposer` to build an MML template. How that template becomes
 /// MIME depends on the detected `TemplateStrategy`:
 /// - `mmlExternal`: compiled by `mml compile` (send goes through `SendTemplateRequest`).
-/// - `himalayaBuiltin` (v1 without mml): himalaya's `template send`/`template save`
-///   compile it themselves.
-/// - `unavailable` (v2 without mml): the message is built in-process by
+/// - `unavailable` (no mml): the message is built in-process by
 ///   `MIMEBuilder` and sent/saved raw, so `send_email` works without mml.
 public struct SendEmailRequest: Request {
     public enum Action: String, Sendable, Decodable {
@@ -104,9 +102,6 @@ public struct SendEmailRequest: Request {
             let mime: String = switch strategy {
             case .mmlExternal:
                 try application.make(MMLServiceKey.self).compile(template)
-            case .himalayaBuiltin:
-                // v1 `template save` compiles MML itself.
-                template
             case .unavailable:
                 try mimeBuilder.build(composition)
             }

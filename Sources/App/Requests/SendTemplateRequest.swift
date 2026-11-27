@@ -3,7 +3,7 @@ import Foundation
 /// Compiles an MML template via `mml compile` then sends the resulting MIME.
 ///
 /// This is NOT a parallel code path — it's `send_message` preceded by a
-/// compilation step. The `mml` binary is the sole compiler on both v1 and v2.
+/// compilation step. The `mml` binary is the sole compiler.
 /// Never sends uncompiled MML as a fallback (that's the original bug).
 public struct SendTemplateRequest: Request {
     public struct Input: Sendable, Decodable {
@@ -75,21 +75,6 @@ public struct SendTemplateRequest: Request {
 
             let sendInput = SendMessageRequest.Input(message: mime, account: input.account)
             return try await SendMessageRequest().execute(sendInput, in: application)
-
-        case .himalayaBuiltin:
-            // ponytail: degraded v1 path without mml — no dry_run, MIME may differ
-            if input.dryRun == true {
-                throw AppError.invalidArgument("dry_run is unavailable without the mml binary.")
-            }
-            guard input.confirm == true else {
-                return "Refusing to send: set confirm=true to actually send the template."
-            }
-
-            let template = MMLAttachment.appended(to: source, paths: input.attachments ?? [])
-            let output = try application.runHimalaya(
-                application.himalayaDialect.sendTemplate(template, account: input.account)
-            )
-            return output.isEmpty ? "Template sent." : output
 
         case .unavailable:
             throw AppError.mmlNotFound
