@@ -283,12 +283,7 @@ sequenceDiagram
   one account — the server shells out to it (found via `PATH` or `$HIMALAYA_BIN_PATH`)
 - The [`mml`](https://github.com/pimalaya/mml) binary (**required on both v1 and v2**) — compiles MML
   templates into MIME before sending. Without it, `send_template` will fail with an actionable error.
-  Install with:
-  ```bash
-  cargo install mime-meta-language --locked --features cli
-  ```
-  > The crate is named `mime-meta-language`, but the installed binary is `mml`.
-  > The `--features cli` flag is **mandatory** — without it only the library is built, no binary.
+  See [Installing mml](#installing-mml).
 - Optional: [`mise`](https://mise.jdx.dev) to run the build/install tasks below
 
 ## Installing the himalaya CLI
@@ -333,6 +328,48 @@ HIMALAYA_VERSION=v2   # env var, or "himalaya.version": "v2" in the config file
 > himalaya v2" error (see [himalaya v1 vs v2](#himalaya-v1-vs-v2)). Check your installed version and
 > its compiled features with `himalaya --version` (e.g. `+msgraph +gmail +imap +smtp`), and verify
 > connectivity with `himalaya-mcp doctor`.
+
+## Installing mml
+
+`mml` ([pimalaya/mml](https://github.com/pimalaya/mml)) compiles MML templates into MIME. It is
+required for `send_template` (and for composing with himalaya v2, which has no built-in MML compiler).
+
+**With mise (recommended — prebuilt static binary, any Linux distro or macOS):**
+
+```bash
+mise use -g github:pimalaya/mml@latest
+```
+
+pimalaya publishes prebuilt binaries for Linux (x86_64, aarch64, armv7, armv6, i686; statically
+linked with musl), macOS (x86_64, aarch64) and Windows on each
+[GitHub release](https://github.com/pimalaya/mml/releases), and mise picks the right one.
+
+**Manually from the GitHub release** (Linux x86_64 shown; replace with your platform's archive):
+
+```bash
+curl -fsSL https://github.com/pimalaya/mml/releases/latest/download/mml.x86_64-linux.tgz \
+  | tar -xz -C ~/.local/bin mml
+```
+
+**With cargo (build from source):**
+
+```bash
+cargo install mime-meta-language --locked --features cli
+```
+
+> The crate is named `mime-meta-language`, but the installed binary is `mml`.
+> The `--features cli` flag is **mandatory** — without it only the library is built, no binary.
+
+**Check it's picked up.** `mml` must be on the `PATH` of the process that starts the MCP server
+(Claude Desktop, Claude Code, …). Then call the `capabilities` tool, which should report:
+
+```text
+mml_present: true
+template_strategy: mml_external
+```
+
+`mml_present` is detected once, when the server starts, so restart your MCP client after installing
+`mml`.
 
 ## Install
 
