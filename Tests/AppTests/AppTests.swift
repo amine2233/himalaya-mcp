@@ -486,6 +486,17 @@ func mimeBuilderAddsAttachmentsAsMultipartMixed() throws {
 }
 
 @Test
+func mimeBuilderNormalizesDecomposedFilenameToNFC() throws {
+    // "résumé" spelled decomposed (e + U+0301), as macOS file-system paths are.
+    let decomposed = "/tmp/re\u{301}sume\u{301}.txt"
+    let mime = try fixedMIMEBuilder.build(EmailComposition(
+        to: "b@c.d", subject: "Hi", body: "x", attachments: [decomposed]
+    ))
+    #expect(mime.contains("filename*=utf-8''r%C3%A9sum%C3%A9.txt\r\n"))
+    #expect(mime.contains("Content-Type: text/plain; name*=utf-8''r%C3%A9sum%C3%A9.txt\r\n"))
+}
+
+@Test
 func mimeBuilderRejectsUnreadableAttachment() throws {
     let builder = MIMEBuilder(readFile: { _ in throw CocoaError(.fileNoSuchFile) })
     #expect(throws: AppError.self) {

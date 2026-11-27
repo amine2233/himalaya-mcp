@@ -104,8 +104,12 @@ public struct MIMEBuilder: Sendable {
     }
 
     static func attachmentPart(data: Data, path: String) -> String {
-        let filename = URL(fileURLWithPath: path).lastPathComponent
-        let mimeType = mimeType(forExtension: URL(fileURLWithPath: path).pathExtension)
+        // Split the path by hand and normalize to NFC: on macOS, `URL` returns the
+        // file-system (decomposed, NFD) spelling, so "é" would become "e" + U+0301.
+        let filename = String(path.split(separator: "/").last ?? Substring(path))
+            .precomposedStringWithCanonicalMapping
+        let ext = filename.contains(".") ? String(filename.split(separator: ".").last ?? "") : ""
+        let mimeType = mimeType(forExtension: ext)
         let nameParameter = filenameParameter(filename)
         let headers = [
             "Content-Type: \(mimeType); \(nameParameter.replacingOccurrences(of: "filename", with: "name"))",
