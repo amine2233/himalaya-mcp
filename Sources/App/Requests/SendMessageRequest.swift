@@ -33,7 +33,7 @@ public struct SendMessageRequest: Request {
         }
 
         let dialect = application.himalayaDialect
-        let invocation = try dialect.sendTemplate(normalized, account: input.account)
+        let invocation = try dialect.sendMessage(normalized, account: input.account)
         let output = try application.runHimalaya(invocation)
         let id = parseMessageId(output)
         return id.map { "sent: true\nid: \($0)" } ?? "sent: true"

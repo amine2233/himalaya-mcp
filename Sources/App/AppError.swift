@@ -1,3 +1,5 @@
+import Foundation
+
 /// The single error type for the `App` module.
 ///
 /// Per the module convention, all failures raised by `App` are expressed as
@@ -23,6 +25,15 @@ public enum AppError: Error, Equatable, Sendable {
     case commandFailed(exitCode: Int32, output: String)
 }
 
+/// Surfaces `description` through `localizedDescription`, so callers (and the
+/// MCP layer) see the real reason instead of Foundation's generic
+/// "The operation could not be completed. (App.AppError error N.)".
+extension AppError: LocalizedError {
+    public var errorDescription: String? {
+        description
+    }
+}
+
 extension AppError: CustomStringConvertible {
     public var description: String {
         switch self {
@@ -40,7 +51,7 @@ extension AppError: CustomStringConvertible {
             return "himalaya command timed out after \(milliseconds) ms."
         case .mmlNotFound:
             return """
-            The mml binary is required for send_template but was not found. \
+            The mml binary is required for send_template and draft_reply but was not found. \
             Install it with: cargo install mime-meta-language --locked --features cli \
             (crate name is "mime-meta-language", binary is "mml", --features cli is mandatory).
             """

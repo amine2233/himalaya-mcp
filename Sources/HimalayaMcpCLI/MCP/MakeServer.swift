@@ -1,5 +1,6 @@
 import App
 import CascadeKit
+import Foundation
 import MCP
 
 /// Builds an MCP `Server` that exposes `ApplicationCore`'s `Request` commands as
@@ -35,11 +36,20 @@ func makeServer(application: Application) async -> Server {
             )
         }
 
-        let output = try await handler.call(params, application)
-        return .init(
-            content: [.text(text: output, annotations: nil, _meta: nil)],
-            isError: false
-        )
+        // Tool failures are reported as `isError` results (MCP spec), carrying
+        // the error's own message rather than a generic JSON-RPC internal error.
+        do {
+            let output = try await handler.call(params, application)
+            return .init(
+                content: [.text(text: output, annotations: nil, _meta: nil)],
+                isError: false
+            )
+        } catch {
+            return .init(
+                content: [.text(text: error.localizedDescription, annotations: nil, _meta: nil)],
+                isError: true
+            )
+        }
     }
 
     return server

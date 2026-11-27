@@ -2,8 +2,13 @@
 /// Composes an email from structured fields and then, depending on `action`,
 /// returns it for review, saves it as a draft, or sends it.
 ///
-/// Uses the `EmailComposer` to build an MML template, then compiles it via
-/// `mml compile` (through `SendTemplateRequest`) for the send path.
+/// Uses the `EmailComposer` to build an MML template. How that template becomes
+/// MIME depends on the detected `TemplateStrategy`:
+/// - `mmlExternal`: compiled by `mml compile` (send goes through `SendTemplateRequest`).
+/// - `himalayaBuiltin` (v1 without mml): himalaya's `template send`/`template save`
+///   compile it themselves.
+/// - `unavailable` (v2 without mml): the message is built in-process by
+///   `MIMEBuilder` and sent/saved raw, so `send_email` works without mml.
 public struct SendEmailRequest: Request {
     public enum Action: String, Sendable, Decodable {
         case preview
@@ -69,11 +74,15 @@ public struct SendEmailRequest: Request {
         }
     }
 
-    public init() {}
+    private let mimeBuilder: MIMEBuilder
+
+    public init(mimeBuilder: MIMEBuilder = MIMEBuilder()) {
+        self.mimeBuilder = mimeBuilder
+    }
 
     public func execute(_ input: Input, in application: Application) async throws -> String {
         let composer = application.emailComposer
-        let template = composer.compose(EmailComposition(
+        let composition = EmailComposition(
             from: input.from,
             to: input.to,
             cc: input.cc,
@@ -83,21 +92,35 @@ public struct SendEmailRequest: Request {
             bodyType: input.bodyType ?? .plain,
             attachments: input.attachments ?? [],
             readReceipt: input.readReceipt
-        ))
+        )
+        let template = composer.compose(composition)
+        let strategy = application.make(CapabilitiesKey.self).templateStrategy
 
         switch input.action ?? .preview {
         case .preview:
             return "Draft (not saved/sent):\n\n\(template)"
         case .draft:
             let folder = input.draftFolder ?? "Drafts"
-            let mml = application.make(MMLServiceKey.self)
-            let mime = try mml.compile(template)
+            let mime: String = switch strategy {
+            case .mmlExternal:
+                try application.make(MMLServiceKey.self).compile(template)
+            case .himalayaBuiltin:
+                // v1 `template save` compiles MML itself.
+                template
+            case .unavailable:
+                try mimeBuilder.build(composition)
+            }
             let dialect = application.himalayaDialect
             let output = try application.runHimalaya(
                 dialect.saveMessage(mime, folder: folder, account: input.account)
             )
             return output.isEmpty ? "Draft saved to \(folder)." : output
         case .send:
+            if strategy == .unavailable {
+                let mime = try mimeBuilder.build(composition)
+                let sendInput = SendMessageRequest.Input(message: mime, account: input.account)
+                return try await SendMessageRequest().execute(sendInput, in: application)
+            }
             let sendInput = SendTemplateRequest.Input(
                 template: template, confirm: true, account: input.account
             )

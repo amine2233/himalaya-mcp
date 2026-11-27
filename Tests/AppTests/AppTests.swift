@@ -359,7 +359,7 @@ func sendEmailDraftHonoursDraftFolder() async throws {
 }
 
 @Test
-func sendEmailSendsViaSendTemplate() async throws {
+func sendEmailSendsCompiledMIMERaw() async throws {
     let compiledMime = "MIME-Version: 1.0\r\nTo: a@b.c\r\n\r\nHello"
     let (app, himalaya) = appWithRecordingHimalaya(
         mml: StubMML(available: true, compileResult: compiledMime)
@@ -371,7 +371,152 @@ func sendEmailSendsViaSendTemplate() async throws {
     #expect(output == "sent: true")
     let calls = himalaya.calls.withLock { $0 }
     #expect(calls.count == 1)
-    #expect(calls[0] == ["template", "send", "--account", "work"])
+    #expect(calls[0] == ["message", "send", "--account", "work"])
+}
+
+// MARK: - send_email without mml (native MIME on himalaya v2)
+
+private let noMMLv2Caps = Capabilities(
+    himalayaVersion: "test", himalayaFamily: .v2,
+    mmlPresent: false, mmlVersion: nil, templateStrategy: .unavailable
+)
+
+private let fixedMIMEBuilder = MIMEBuilder(
+    now: { Date(timeIntervalSince1970: 0) },
+    makeBoundary: { "BOUNDARY" },
+    makeMessageIDLocalPart: { "id" },
+    readFile: { _ in Data("PDFDATA".utf8) }
+)
+
+@Test
+func sendEmailWithoutMMLOnV2SendsNativeMIME() async throws {
+    let (app, himalaya) = appWithRecordingHimalaya(
+        dialect: HimalayaDialectV2(),
+        mml: StubMML(available: false, error: AppError.mmlNotFound),
+        capabilities: noMMLv2Caps
+    )
+    let output = try await SendEmailRequest(mimeBuilder: fixedMIMEBuilder).execute(
+        SendEmailRequest.Input(
+            to: "b@c.d", subject: "Hi", body: "Hello", from: "a@b.c", account: "work", action: .send
+        ),
+        in: app
+    )
+    #expect(output.hasPrefix("sent: true"))
+    #expect(himalaya.calls.withLock { $0 } == [["message", "send", "--account", "work"]])
+    let sent = try #require(himalaya.stdins.withLock { $0 }.first ?? nil)
+    #expect(sent == [
+        "From: a@b.c",
+        "To: b@c.d",
+        "Subject: Hi",
+        "Date: Thu, 01 Jan 1970 00:00:00 +0000",
+        "Message-ID: <id@b.c>",
+        "MIME-Version: 1.0",
+        "Content-Type: text/plain; charset=utf-8",
+        "Content-Transfer-Encoding: 7bit",
+        "",
+        "Hello"
+    ].joined(separator: "\r\n"))
+}
+
+@Test
+func sendEmailWithoutMMLOnV2SavesNativeDraft() async throws {
+    let (app, himalaya) = appWithRecordingHimalaya(
+        dialect: HimalayaDialectV2(),
+        mml: StubMML(available: false, error: AppError.mmlNotFound),
+        capabilities: noMMLv2Caps
+    )
+    let output = try await SendEmailRequest(mimeBuilder: fixedMIMEBuilder).execute(
+        SendEmailRequest.Input(to: "b@c.d", subject: "Hi", body: "Hello", action: .draft),
+        in: app
+    )
+    #expect(output == "Draft saved to Drafts.")
+    #expect(himalaya.calls.withLock { $0 } == [["message", "save", "--mailbox", "Drafts"]])
+    let saved = try #require(himalaya.stdins.withLock { $0 }.first ?? nil)
+    #expect(saved.contains("MIME-Version: 1.0\r\n"))
+    #expect(saved.hasSuffix("\r\n\r\nHello"))
+}
+
+@Test
+func sendEmailWithoutMMLOnV1DraftUsesBuiltinTemplateSave() async throws {
+    let (app, himalaya) = appWithRecordingHimalaya(
+        mml: StubMML(available: false, error: AppError.mmlNotFound),
+        capabilities: Capabilities(
+            himalayaVersion: "test", himalayaFamily: .v1,
+            mmlPresent: false, mmlVersion: nil, templateStrategy: .himalayaBuiltin
+        )
+    )
+    let output = try await SendEmailRequest().execute(
+        SendEmailRequest.Input(to: "b@c.d", subject: "Hi", body: "Hello", action: .draft),
+        in: app
+    )
+    #expect(output == "Draft saved to Drafts.")
+    #expect(himalaya.calls.withLock { $0 } == [["template", "save", "--folder", "Drafts"]])
+    #expect(himalaya.stdins.withLock { $0 }.first == "To: b@c.d\nSubject: Hi\n\nHello")
+}
+
+@Test
+func mimeBuilderEncodesNonASCIIAndHtml() throws {
+    let mime = try fixedMIMEBuilder.build(EmailComposition(
+        from: "Amélie <a@b.c>", to: "b@c.d", subject: "Réunion", body: "<p>Café</p>", bodyType: .html
+    ))
+    #expect(mime.contains("From: =?utf-8?B?\(Data("Amélie".utf8).base64EncodedString())?= <a@b.c>\r\n"))
+    #expect(mime.contains("Subject: =?utf-8?B?\(Data("Réunion".utf8).base64EncodedString())?=\r\n"))
+    #expect(mime.contains("Content-Type: text/html; charset=utf-8\r\nContent-Transfer-Encoding: base64\r\n"))
+    #expect(mime.hasSuffix("\r\n\r\n" + Data("<p>Café</p>".utf8).base64EncodedString()))
+}
+
+@Test
+func mimeBuilderAddsAttachmentsAsMultipartMixed() throws {
+    let mime = try fixedMIMEBuilder.build(EmailComposition(
+        to: "b@c.d", subject: "Hi", body: "See attached", attachments: ["/tmp/report.pdf", "/tmp/résumé.txt"]
+    ))
+    #expect(mime.contains("Content-Type: multipart/mixed; boundary=\"BOUNDARY\"\r\n\r\n--BOUNDARY\r\n"))
+    #expect(mime
+        .contains(
+            "Content-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: 7bit\r\n\r\nSee attached\r\n"
+        ))
+    #expect(mime.contains("Content-Type: application/pdf; name=\"report.pdf\"\r\n"))
+    #expect(mime.contains("Content-Disposition: attachment; filename=\"report.pdf\"\r\n"))
+    #expect(mime.contains("Content-Disposition: attachment; filename*=utf-8''r%C3%A9sum%C3%A9.txt\r\n"))
+    #expect(mime
+        .contains(
+            "Content-Transfer-Encoding: base64\r\n\r\n\(Data("PDFDATA".utf8).base64EncodedString())\r\n"
+        ))
+    #expect(mime.hasSuffix("--BOUNDARY--\r\n"))
+}
+
+@Test
+func mimeBuilderNormalizesDecomposedFilenameToNFC() throws {
+    // "résumé" spelled decomposed (e + U+0301), as macOS file-system paths are.
+    let decomposed = "/tmp/re\u{301}sume\u{301}.txt"
+    let mime = try fixedMIMEBuilder.build(EmailComposition(
+        to: "b@c.d", subject: "Hi", body: "x", attachments: [decomposed]
+    ))
+    #expect(mime.contains("filename*=utf-8''r%C3%A9sum%C3%A9.txt\r\n"))
+    #expect(mime.contains("Content-Type: text/plain; name*=utf-8''r%C3%A9sum%C3%A9.txt\r\n"))
+}
+
+@Test
+func mimeBuilderRejectsUnreadableAttachment() throws {
+    let builder = MIMEBuilder(readFile: { _ in throw CocoaError(.fileNoSuchFile) })
+    #expect(throws: AppError.self) {
+        try builder.build(EmailComposition(to: "b@c.d", subject: "Hi", body: "x", attachments: ["/nope"]))
+    }
+}
+
+@Test
+func mimeBuilderStripsHeaderInjection() throws {
+    let mime = try fixedMIMEBuilder.build(EmailComposition(
+        to: "b@c.d", subject: "Hi\r\nBcc: evil@x.y", body: "x"
+    ))
+    #expect(mime.contains("Subject: Hi  Bcc: evil@x.y\r\n"))
+    #expect(!mime.contains("\r\nBcc:"))
+}
+
+@Test
+func appErrorLocalizedDescriptionIsReadable() {
+    #expect(AppError.mmlNotFound.localizedDescription.contains("mml binary"))
+    #expect(AppError.invalidArgument("boom").localizedDescription == "boom")
 }
 
 @Test
@@ -403,7 +548,7 @@ func sendTemplateSendsInlineTemplateWhenConfirmed() async throws {
     let output = try await SendTemplateRequest().execute(input, in: app)
 
     #expect(output == "sent: true")
-    #expect(himalaya.calls.withLock { $0 } == [["template", "send"]])
+    #expect(himalaya.calls.withLock { $0 } == [["message", "send"]])
     #expect(himalaya.stdins.withLock { $0 } == [compiledMime])
 }
 
@@ -436,7 +581,7 @@ func sendTemplateReadsFromFile() async throws {
     _ = try await SendTemplateRequest().execute(
         SendTemplateRequest.Input(templateFile: file.path, confirm: true), in: app
     )
-    #expect(himalaya.calls.withLock { $0 } == [["template", "send"]])
+    #expect(himalaya.calls.withLock { $0 } == [["message", "send"]])
     #expect(himalaya.stdins.withLock { $0 } == [compiledMime])
 }
 
@@ -674,6 +819,10 @@ func v1DialectGeneratesEveryCommand() throws {
         ["template", "send", "--account", "work"],
         standardInput: "RAW"
     ))
+    #expect(try d.sendMessage("RAW", account: "work") == HimalayaInvocation(
+        ["message", "send", "--account", "work"],
+        standardInput: "RAW"
+    ))
     #expect(try d.listAttachments(id: "7", destination: "/tmp/a", mailbox: nil, account: nil).arguments
         == ["attachment", "download", "7", "--downloads-dir", "/tmp/a"])
     #expect(try d.downloadAttachments(id: "7", destination: "/tmp/a", mailbox: "INBOX", account: nil)
@@ -726,6 +875,10 @@ func v2DialectGeneratesSupportedCommands() throws {
     #expect(try d.moveMessage(id: "3", target: "Archive", mailbox: "INBOX", account: "work").arguments
         == ["message", "move", "--to", "Archive", "--from", "INBOX", "3", "--account", "work"])
     #expect(try d.sendTemplate("RAW", account: "work") == HimalayaInvocation(
+        ["message", "send", "--account", "work"],
+        standardInput: "RAW"
+    ))
+    #expect(try d.sendMessage("RAW", account: "work") == HimalayaInvocation(
         ["message", "send", "--account", "work"],
         standardInput: "RAW"
     ))
@@ -1071,7 +1224,30 @@ func sendMessageTextPlainSentVerbatim() async throws {
         SendMessageRequest.Input(message: raw, account: "work"), in: app
     )
     #expect(output == "sent: true")
+    #expect(himalaya.calls.withLock { $0 } == [["message", "send", "--account", "work"]])
     #expect(himalaya.stdins.withLock { $0 } == [raw])
+}
+
+@Test
+func sendMessageWorksWithoutMML() async throws {
+    let raw = "From: a@b.com\r\nTo: c@d.com\r\nSubject: test\r\n\r\nHello"
+    for (dialect, caps) in [
+        (HimalayaDialectV1() as any HimalayaDialect, Capabilities(
+            himalayaVersion: "test", himalayaFamily: .v1,
+            mmlPresent: false, mmlVersion: nil, templateStrategy: .himalayaBuiltin
+        )),
+        (HimalayaDialectV2() as any HimalayaDialect, noMMLv2Caps)
+    ] {
+        let (app, himalaya) = appWithRecordingHimalaya(
+            dialect: dialect,
+            mml: StubMML(available: false, error: AppError.mmlNotFound),
+            capabilities: caps
+        )
+        let output = try await SendMessageRequest().execute(SendMessageRequest.Input(message: raw), in: app)
+        #expect(output == "sent: true")
+        #expect(himalaya.calls.withLock { $0 } == [["message", "send"]])
+        #expect(himalaya.stdins.withLock { $0 } == [raw])
+    }
 }
 
 @Test
