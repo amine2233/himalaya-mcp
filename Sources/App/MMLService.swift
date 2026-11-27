@@ -3,27 +3,19 @@ import Foundation
 
 /// Strategy for compiling MML templates into MIME.
 public enum TemplateStrategy: String, Sendable {
-    /// External `mml compile` binary (preferred, works on both v1 and v2).
+    /// External `mml compile` binary.
     case mmlExternal = "mml_external"
-    /// v1's built-in `template send` does its own compilation (no dry_run, MIME may differ).
-    case himalayaBuiltin = "himalaya_builtin"
-    /// `mml` is absent and v2 cannot compile MML.
+    /// `mml` is absent: himalaya v2 can't compile MML, so `send_template` is
+    /// unavailable, while `send_email` builds MIME natively.
     case unavailable
 }
 
 /// Detected capabilities, cached for the process lifetime.
 public struct Capabilities: Sendable {
     public let himalayaVersion: String
-    public let himalayaFamily: HimalayaFamily
     public let mmlPresent: Bool
     public let mmlVersion: String?
     public let templateStrategy: TemplateStrategy
-}
-
-/// Which CLI family was detected via structural probe.
-public enum HimalayaFamily: String, Sendable {
-    case v1
-    case v2
 }
 
 /// Resolves and runs the `mml` binary.

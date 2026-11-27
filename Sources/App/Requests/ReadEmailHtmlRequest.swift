@@ -2,10 +2,9 @@ import Foundation
 
 /// Reads the HTML body of a message.
 ///
-/// himalaya's `message read` only renders a plain, human-friendly version, so
-/// this uses `message export` — the documented way to "read a HTML message" —
-/// exporting every MIME part into a throwaway directory and returning the HTML
-/// part's contents. The directory is always cleaned up.
+/// himalaya's plain `message read` only prints HTML when it is the sole text
+/// part, so this reads the parsed message (`message read --json`) and returns
+/// the decoded HTML part(s).
 public struct ReadEmailHtmlRequest: Request {
     public struct Input: Sendable, Decodable {
         /// Envelope id of the message to read.
@@ -25,37 +24,18 @@ public struct ReadEmailHtmlRequest: Request {
     public init() {}
 
     public func execute(_ input: Input, in application: Application) async throws -> String {
-        try HimalayaWorkspace.withTemporaryDirectory { directory in
-            _ = try application.runHimalaya(
-                application.himalayaDialect.exportMessage(
-                    id: input.id, destination: directory.path, mailbox: input.folder, account: input.account
-                )
+        let output = try application.runHimalaya(
+            application.himalayaDialect.readMessageJSON(
+                id: input.id,
+                mailbox: input.folder,
+                account: input.account
             )
-
-            guard let html = try Self.htmlContents(in: directory) else {
-                return "No HTML part found for message \(input.id)."
-            }
-
-            return html.trimmingCharacters(in: .whitespacesAndNewlines)
+        )
+        let html = try HimalayaMessageJSON(output).htmlBodies
+        guard !html.isEmpty else {
+            return "No HTML part found for message \(input.id)."
         }
-    }
 
-    /// Returns the concatenated contents of the exported HTML part(s), preferring
-    /// files with an `.html`/`.htm` extension and otherwise sniffing for markup.
-    private static func htmlContents(in directory: URL) throws -> String? {
-        let files = try HimalayaWorkspace.files(in: directory)
-
-        let byExtension = files.filter { ["html", "htm"].contains($0.pathExtension.lowercased()) }
-        let candidates = byExtension.isEmpty ? files : byExtension
-
-        var matches: [String] = []
-        for url in candidates {
-            guard let content = try? String(contentsOf: url, encoding: .utf8) else { continue }
-
-            if !byExtension.isEmpty || content.lowercased().contains("<html") {
-                matches.append(content)
-            }
-        }
-        return matches.isEmpty ? nil : matches.joined(separator: "\n")
+        return html.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

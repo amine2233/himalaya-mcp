@@ -15,10 +15,7 @@ public func configure(_ app: Application) async {
         HimalayaServiceDefault(executable: container.make(ExecutableServiceKey.self))
     }
     app.register(HimalayaDialectKey.self) { _ in
-        switch settings.version {
-        case .v1: HimalayaDialectV1(defaultAccount: settings.account, defaultFolder: settings.folder)
-        case .v2: HimalayaDialectV2(defaultAccount: settings.account, defaultFolder: settings.folder)
-        }
+        HimalayaDialectV2(defaultAccount: settings.account, defaultFolder: settings.folder)
     }
     app.register(MMLServiceKey.self) { container in
         MMLServiceDefault(executable: container.make(ExecutableServiceKey.self))
@@ -45,21 +42,13 @@ private func buildCapabilities(
     settings: HimalayaSettings
 ) -> Capabilities {
     let himalayaVersion = (try? himalayaService.run(arguments: ["--version"])) ?? "unknown"
-    let family: HimalayaFamily = settings.version == .v2 ? .v2 : .v1
     let mmlPresent = mmlService.isAvailable()
     let mmlVersion = mmlService.version()
 
-    let strategy: TemplateStrategy = if mmlPresent {
-        .mmlExternal
-    } else if family == .v1 {
-        .himalayaBuiltin
-    } else {
-        .unavailable
-    }
+    let strategy: TemplateStrategy = mmlPresent ? .mmlExternal : .unavailable
 
     return Capabilities(
         himalayaVersion: himalayaVersion,
-        himalayaFamily: family,
         mmlPresent: mmlPresent,
         mmlVersion: mmlVersion,
         templateStrategy: strategy

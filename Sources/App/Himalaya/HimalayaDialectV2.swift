@@ -2,14 +2,12 @@ import AppConfiguration
 
 /// himalaya v2 command builder.
 ///
-/// v2 reworks the CLI: `mailbox` replaces `folder`, `--mailbox` replaces
-/// `--folder`, `--json` replaces `-o json`, `envelope search` is its own command,
-/// flags are passed as `--flag <F>`, `message move` uses `--from`/`--to`, and the
-/// `template`/`export`/`message delete` commands are gone. Operations that v2
-/// (currently, alpha) doesn't offer throw a clear "not supported" error.
+/// Targets the himalaya v2 CLI: `mailbox`/`--mailbox`, `--json`, `envelope
+/// search`, `--flag <F>`, `message move --from/--to`, and the IMAP-specific
+/// `imap create`/`imap delete` for folders. There is no `template` command:
+/// MML is compiled by the external `mml` binary, or `send_email` builds MIME
+/// natively.
 public struct HimalayaDialectV2: HimalayaDialect {
-    public let version: HimalayaVersion = .v2
-
     private let defaultAccount: String?
     private let defaultFolder: String?
 
@@ -47,25 +45,21 @@ public struct HimalayaDialectV2: HimalayaDialect {
         HimalayaInvocation(["message", "read", id] + mailboxArgs(mailbox) + accountArgs(account))
     }
 
-    public func exportMessage(
-        id: String,
-        destination: String,
-        mailbox: String?,
-        account: String?
-    ) throws -> HimalayaInvocation {
-        throw unsupported("Exporting a message (read_email_html)")
+    public func readMessageJSON(id: String, mailbox: String?, account: String?) -> HimalayaInvocation {
+        HimalayaInvocation(["message", "read", id] + mailboxArgs(mailbox) + accountArgs(account) + ["--json"])
     }
 
     public func listMailboxes(account: String?) -> HimalayaInvocation {
         HimalayaInvocation(["mailbox", "list"] + accountArgs(account))
     }
 
-    public func createMailbox(name: String, account: String?) throws -> HimalayaInvocation {
-        throw unsupported("Creating a folder")
+    public func createMailbox(name: String, account: String?) -> HimalayaInvocation {
+        // v2's shared `mailbox` API only lists; creation is IMAP-specific.
+        HimalayaInvocation(["imap", "create", name] + accountArgs(account))
     }
 
-    public func deleteMailbox(name: String, account: String?) throws -> HimalayaInvocation {
-        throw unsupported("Deleting a folder")
+    public func deleteMailbox(name: String, account: String?) -> HimalayaInvocation {
+        HimalayaInvocation(["imap", "delete", name] + accountArgs(account))
     }
 
     public func setFlags(
@@ -121,14 +115,19 @@ public struct HimalayaDialectV2: HimalayaDialect {
         )
     }
 
-    public func replyTemplate(
+    public func replyMessage(
         id: String,
         body: String?,
-        all: Bool,
+        cc: [String],
         mailbox: String?,
         account: String?
-    ) throws -> HimalayaInvocation {
-        throw unsupported("Replying with a template (draft_reply)")
+    ) -> HimalayaInvocation {
+        // Without --save/--send, `message reply` prints the composed reply. Always
+        // pass --body so himalaya never waits on stdin.
+        var args = ["message", "reply", id] + mailboxArgs(mailbox) + accountArgs(account)
+        args += ["--body", body ?? ""]
+        if !cc.isEmpty { args += ["--cc", cc.joined(separator: ",")] }
+        return HimalayaInvocation(args)
     }
 
     public func sendTemplate(_ template: String, account: String?) -> HimalayaInvocation {
@@ -160,12 +159,9 @@ public struct HimalayaDialectV2: HimalayaDialect {
             accountArgs(account))
     }
 
-    public func deleteMessages(
-        ids: [String],
-        mailbox: String?,
-        account: String?
-    ) throws -> HimalayaInvocation {
-        throw unsupported("Deleting messages (delete_email)")
+    public func deleteMessages(ids: [String], mailbox: String?, account: String?) -> HimalayaInvocation {
+        // Moves to the trash, or deletes for good when already in the trash.
+        HimalayaInvocation(["message", "delete"] + ids + mailboxArgs(mailbox) + accountArgs(account))
     }
 
     public func listAccountsJSON() -> HimalayaInvocation {

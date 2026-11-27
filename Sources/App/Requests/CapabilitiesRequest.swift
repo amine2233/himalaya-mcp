@@ -1,5 +1,5 @@
 
-/// Returns the detected capabilities: himalaya version/family, mml presence,
+/// Returns the detected capabilities: himalaya version, mml presence,
 /// and the template strategy. Diagnostic tool for debugging.
 public struct CapabilitiesRequest: Request {
     public struct Input: Sendable, Decodable {
@@ -12,7 +12,6 @@ public struct CapabilitiesRequest: Request {
         let caps = application.make(CapabilitiesKey.self)
         var lines = [
             "himalaya_version: \(caps.himalayaVersion)",
-            "himalaya_family: \(caps.himalayaFamily.rawValue)",
             "mml_present: \(caps.mmlPresent)"
         ]
         if let v = caps.mmlVersion { lines.append("mml_version: \(v)") }
