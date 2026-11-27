@@ -58,6 +58,9 @@ public protocol HimalayaDialect: Sendable {
     func replyTemplate(id: String, body: String?, all: Bool, mailbox: String?, account: String?) throws
         -> HimalayaInvocation
     func sendTemplate(_ template: String, account: String?) throws -> HimalayaInvocation
+    /// Sends an already-composed raw RFC 5322 message (piped via stdin) verbatim,
+    /// with no MML compilation. Same `message send` command on v1 and v2.
+    func sendMessage(_ message: String, account: String?) throws -> HimalayaInvocation
 
     func listAttachments(id: String, destination: String, mailbox: String?, account: String?) throws
         -> HimalayaInvocation

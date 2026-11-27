@@ -281,8 +281,10 @@ sequenceDiagram
 - macOS 15+ (required by `swift-configuration` 1.0)
 - The [`himalaya`](https://github.com/pimalaya/himalaya) CLI, installed and configured with at least
   one account — the server shells out to it (found via `PATH` or `$HIMALAYA_BIN_PATH`)
-- The [`mml`](https://github.com/pimalaya/mml) binary (**required on both v1 and v2**) — compiles MML
-  templates into MIME before sending. Without it, `send_template` will fail with an actionable error.
+- The [`mml`](https://github.com/pimalaya/mml) binary (**recommended**) — compiles MML templates into
+  MIME. `send_template` and `draft_reply` need it. `send_email` and `send_message` work **without** it:
+  on v2 with no `mml`, `send_email` builds the MIME message itself (UTF-8 text or HTML body,
+  attachments as `multipart/mixed`), and `send_message` always sends raw via `message send`.
   See [Installing mml](#installing-mml).
 - Optional: [`mise`](https://mise.jdx.dev) to run the build/install tasks below
 
@@ -332,7 +334,8 @@ HIMALAYA_VERSION=v2   # env var, or "himalaya.version": "v2" in the config file
 ## Installing mml
 
 `mml` ([pimalaya/mml](https://github.com/pimalaya/mml)) compiles MML templates into MIME. It is
-required for `send_template` (and for composing with himalaya v2, which has no built-in MML compiler).
+required for `send_template`. Without it, `send_email` falls back to building the MIME message natively,
+and `send_message` never needs it.
 
 **With mise (recommended — prebuilt static binary, any Linux distro or macOS):**
 

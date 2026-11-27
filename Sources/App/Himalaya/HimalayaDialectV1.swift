@@ -137,6 +137,11 @@ public struct HimalayaDialectV1: HimalayaDialect {
         HimalayaInvocation(["template", "send"] + accountArgs(account), standardInput: template)
     }
 
+    public func sendMessage(_ message: String, account: String?) -> HimalayaInvocation {
+        // `template send` would re-parse the input as MML; `message send` sends it raw.
+        HimalayaInvocation(["message", "send"] + accountArgs(account), standardInput: message)
+    }
+
     public func listAttachments(
         id: String,
         destination: String,

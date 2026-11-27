@@ -136,6 +136,10 @@ public struct HimalayaDialectV2: HimalayaDialect {
         HimalayaInvocation(["message", "send"] + accountArgs(account), standardInput: template)
     }
 
+    public func sendMessage(_ message: String, account: String?) -> HimalayaInvocation {
+        HimalayaInvocation(["message", "send"] + accountArgs(account), standardInput: message)
+    }
+
     public func listAttachments(
         id: String,
         destination: String,
